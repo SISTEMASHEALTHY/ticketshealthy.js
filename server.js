@@ -1105,6 +1105,26 @@ app.get('/api/dashboard/tickets-por-categoria-subcategoria', async (req, res) =>
   }
 });
 
+// En tu server.js
+app.post('/api/checador', async (req, res) => {
+  const { user_id, tipo, foto } = req.body;
+  if (!user_id || !tipo || !foto) return res.status(400).json({ error: 'Faltan datos' });
+
+  // Subir la foto a Cloudinary
+  const uploadResponse = await cloudinary.uploader.upload(foto, {
+    folder: 'checador',
+    public_id: `checada_${user_id}_${Date.now()}`
+  });
+
+  // Guardar en la base de datos
+  await pool.query(
+    'INSERT INTO checadas (user_id, tipo, fecha, foto) VALUES (?, ?, NOW(), ?)',
+    [user_id, tipo, uploadResponse.secure_url]
+  );
+
+  res.json({ message: 'Registro guardado correctamente' });
+});
+
 
 
 
