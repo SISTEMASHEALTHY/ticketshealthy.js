@@ -265,6 +265,7 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
     }
     console.log('Login exitoso:', username);
+    await registrarAuditoria(user.id, user.username, 'Login', 'Inicio de sesión exitoso', req);
     res.json({ id: user.id, username: user.username, department: user.department, role: user.role });
   } catch (error) {
     console.error('Error en /api/login:', error);
@@ -301,6 +302,7 @@ app.post('/api/users', async (req, res) => {
       'INSERT INTO users (username, password, email, department, role) VALUES (?, ?, ?, ?, ?)',
       [username, hashedPassword, email, department, role]
     );
+      await registrarAuditoria(adminId, username, 'Crear usuario', `Usuario creado: ${username}`, req);
     try {
       await sendWelcomeEmail(email, username, password);
     } catch (emailError) {
@@ -391,6 +393,7 @@ app.put('/api/users/:id/password', async (req, res) => {
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedNewPassword, id]);
     console.log('Contraseña cambiada para usuario ID:', id);
+    await registrarAuditoria(userId, user.username, 'Cambiar contraseña', 'Contraseña cambiada', req);
     res.json({ message: 'Contraseña cambiada exitosamente' });
   } catch (error) {
     console.error('Error en /api/users/:id/password:', error);
@@ -418,6 +421,7 @@ try {
     'INSERT INTO ticket_status_history (ticket_id, status, changed_at, observations, user_id, attachment) VALUES (?, ?, NOW(), ?, ?, ?)',
     [ticketId, 'Pendiente', 'Estado inicial', userId, null]
   );
+  await registrarAuditoria(userId, requester, 'Crear ticket', `Ticket creado: ${ticketId}`, req);
   await sendTicketCreationEmail(ticketId, department, requester, description);
   res.json({ message: 'Ticket creado', ticketId });
 } catch (error) {
@@ -521,6 +525,7 @@ app.put('/api/tickets/:id/assign', async (req, res) => {
         'INSERT INTO ticket_status_history (ticket_id, status, changed_at, observations, user_id, attachment) VALUES (?, ?, NOW(), ?, ?, ?)',
         [id, ticket.status, `Ticket autoasignado a usuario ID ${assignedTo}`, userId, null]
       );
+      await registrarAuditoria(userId, null, 'Asignar ticket', `Ticket asignado: ${id} a usuario ${assignedTo}`, req);
       // Enviar correo al usuario asignado
       const [assignedUsers] = await pool.query('SELECT username, email FROM users WHERE id = ?', [assignedTo]);
       const assignedUser = assignedUsers[0];
@@ -746,6 +751,7 @@ app.put('/api/tickets/:id/transfer', async (req, res) => {
       'INSERT INTO ticket_status_history (ticket_id, status, changed_at, observations, user_id, attachment) VALUES (?, ?, NOW(), ?, ?, ?)',
       [id, ticket.status, `Ticket transferido a ${newDepartment}. Observaciones: ${observations}`, userId, null]
     );
+    await registrarAuditoria(userId, null, 'Transferir ticket', `Ticket transferido: ${id} a ${newDepartment}`, req);
     console.log('Ticket transferido, ID:', id, 'a:', newDepartment);
     res.json({ message: 'Ticket transferido' });
   } catch (error) {
@@ -771,6 +777,7 @@ app.put('/api/tickets/:id', upload.single('file'), async (req, res) => {
       'INSERT INTO ticket_status_history (ticket_id, status, changed_at, observations, user_id, attachment) VALUES (?, ?, NOW(), ?, ?, ?)',
       [id, status, observations || '', userId, file]
     );
+    await registrarAuditoria(userId, null, 'Actualizar estado', `Ticket ${id} actualizado a ${status}`, req);
     res.json({ message: 'Estado actualizado' });
   } catch (error) {
     console.error('Error en /api/tickets/:id:', error);
@@ -809,6 +816,7 @@ app.put('/api/tickets/:id/reopen', async (req, res) => {
       'INSERT INTO ticket_status_history (ticket_id, status, changed_at, observations, user_id, attachment) VALUES (?, ?, NOW(), ?, ?, ?)',
       [id, 'Pendiente', observations || 'Ticket reabierto por admin', userId, null]
     );
+    await registrarAuditoria(userId, null, 'Reabrir ticket', `Ticket reabierto: ${id}`, req);
     console.log('Ticket reabierto, ID:', id);
     res.json({ message: 'Ticket reabierto' });
   } catch (error) {
@@ -1125,8 +1133,102 @@ app.post('/api/checador', async (req, res) => {
   res.json({ message: 'Registro guardado correctamente' });
 });
 
+  app.put('/api/permisos/:id/aprobar-rh', async (req, res) => {
+    const { id } = req.params;
+    const { aprobador_id, estado, observaciones } = req.body; // estado: 'Aprobado' o 'Rechazado'
+    const nuevoEstado = estado === 'Aprobado' ? 'Aprobado RH' : 'Rechazado RH';
+    try {
+      // Obtener la solicitud de permiso
+      const [permisos] = await pool.query('SELECT * FROM permisos WHERE id = ?', [id]);
+      if (permisos.length === 0) {
+        return res.status(404).json({ error: 'Permiso no encontrado' });
+      }
+      const permiso = permisos[0];
+      // Si es vacaciones y se va a aprobar por RH
+      if (permiso.tipo === 'Vacaciones' && estado === 'Aprobado') {
+        // Calcular días solicitados (ambos inclusive)
+        const fechaInicio = new Date(permiso.fecha_inicio);
+        const fechaFin = new Date(permiso.fecha_fin);
+        const diffTime = fechaFin.getTime() - fechaInicio.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        // Obtener usuario
+        const [usuarios] = await pool.query('SELECT dias_vacaciones FROM users WHERE id = ?', [permiso.user_id]);
+        if (usuarios.length === 0) {
+          return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        const diasDisponibles = usuarios[0].dias_vacaciones;
+        if (diasDisponibles < diffDays) {
+          return res.status(400).json({ error: `El usuario solo tiene ${diasDisponibles} días de vacaciones disponibles y está solicitando ${diffDays}` });
+        }
+        // Restar días
+        await pool.query('UPDATE users SET dias_vacaciones = dias_vacaciones - ? WHERE id = ?', [diffDays, permiso.user_id]);
+      }
+      await pool.query(`UPDATE permisos SET estado = ? WHERE id = ?`, [nuevoEstado, id]);
+      await pool.query(
+        `INSERT INTO permisos_historial (permiso_id, aprobador_id, rol_aprobador, estado, observaciones)
+        VALUES (?, ?, 'rh', ?, ?)`,
+        [id, aprobador_id, estado, observaciones]
+      );
+      res.json({ message: 'Respuesta registrada' });
+    } catch (error) {
+      res.status(500).json({ error: 'Error al actualizar solicitud' });
+    }
+  });
 
+  async function registrarAuditoria(usuario_id, username, accion, descripcion, req) {
+    const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || '';
+    let nombreUsuario = username;
+    if (!nombreUsuario && usuario_id) {
+      // Si no se pasó el username, búscalo por el id
+      const [users] = await pool.query('SELECT username FROM users WHERE id = ?', [usuario_id]);
+      if (users.length > 0) {
+        nombreUsuario = users[0].username;
+      }
+    }
+    await pool.query(
+      'INSERT INTO auditoria (usuario_id, username, accion, descripcion, ip) VALUES (?, ?, ?, ?, ?)',
+      [usuario_id, nombreUsuario, accion, descripcion, ip]
+    );
+  }
 
+  app.get('/api/auditoria', async (req, res) => {
+    const { adminId, fecha, usuario, accion } = req.query;
+    const [admins] = await pool.query('SELECT * FROM users WHERE id = ? AND role = "admin"', [adminId]);
+    if (admins.length === 0) {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+
+    let sql = `
+      SELECT 
+        id, 
+        DATE_FORMAT(DATE_SUB(fecha, INTERVAL 1 HOUR), '%d/%m/%Y %H:%i:%s') AS fecha, 
+        username, 
+        accion, 
+        descripcion, 
+        ip 
+      FROM auditoria
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (fecha) {
+      sql += " AND DATE(DATE_SUB(fecha, INTERVAL 1 HOUR)) = ?";
+      params.push(fecha); // formato: 'YYYY-MM-DD'
+    }
+    if (usuario) {
+      sql += " AND username LIKE ?";
+      params.push(`%${usuario}%`);
+    }
+    if (accion) {
+      sql += " AND accion LIKE ?";
+      params.push(`%${accion}%`);
+    }
+
+    sql += " ORDER BY fecha DESC LIMIT 200";
+
+    const [rows] = await pool.query(sql, params);
+    res.json(rows);
+  });
 
 // Error handling middleware
 app.use((error, req, res, next) => {

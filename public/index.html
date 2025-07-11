@@ -5,7 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistema de Tickets</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
+<style>
+  #ticketsPaginacion, #myTicketsPaginacion {
+    text-align: center;
+    margin: 1rem 0;
+  }
+  #ticketsPaginacion button, #myTicketsPaginacion button {
+    margin: 0 2px;
+  }
+</style>
 <body>
   <div class="container">
     <!-- Pantalla de Login -->
@@ -44,6 +54,7 @@
       <p>Bienvenido, <span id="adminUser"></span> (Administrador)</p>
       <button class="logout" onclick="logout()">Cerrar Sesión</button>
       <button onclick="showTicketSystem()">Ir a Tickets</button>
+      <button id="btnAuditoria" style="display:none;" onclick="mostrarAuditoria()">Ver Bitácora de Auditoría</button>
 
       <div class="form-section">
         <h2>Crear Usuario</h2>
@@ -304,12 +315,61 @@
           <div id="statusHistory"></div>
         </div>
       </div>
+
+      <!-- Sección de Auditoría -->
+      <div id="auditoriaSection" class="section" style="display: none;">
+        <h2>Bitácora de Auditoría</h2>
+        <button onclick="backToMenu()">Volver al Menú</button>
+        <div class="filtros-auditoria">
+          <label>Fecha: <input type="date" id="filtroFecha"></label>
+          <label>Usuario: <input type="text" id="filtroUsuario" placeholder="Usuario"></label>
+          <label>Acción: 
+            <select id="filtroAccion">
+              <option value="">Todas</option>
+              <!-- Opciones llenadas dinámicamente -->
+            </select>
+          </label>
+          <button onclick="aplicarFiltrosAuditoria()">Filtrar</button>
+          <button onclick="descargarAuditoriaExcel()">Descargar Excel</button>
+        </div>
+        <table id="tablaAuditoria">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Usuario</th>
+              <th>Acción</th>
+              <th>Descripción</th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody id="auditoriaTableBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
   <script>
     let currentUser = null;
     let availableUsers = [];
+    let ticketsData = [];
+    let ticketsPaginaActual = 1;
+    const ticketsFilasPorPagina = 10;
+
+    let myTicketsData = [];
+    let myTicketsPaginaActual = 1;
+    const myTicketsFilasPorPagina = 10;
+
+    let auditoriaData = [];
+    let auditoriaPaginaActual = 1;
+    const auditoriaFilasPorPagina = 10;
+
+    function parsearFechaTicket(fechaStr) {
+      if (!fechaStr) return new Date(0);
+      const [fecha, hora] = fechaStr.split(' ');
+      if (!fecha || !hora) return new Date(fechaStr); // fallback
+      const [dia, mes, anio] = fecha.split('/');
+      return new Date(`${anio}-${mes}-${dia}T${hora}`);
+    }
 
     async function loadAvailableUsers() {
       try {
@@ -564,7 +624,6 @@
       const category = document.getElementById('filterCategory').value;
 
       if (!currentUser || !currentUser.id) {
-        console.error('Usuario no autenticado:', currentUser);
         ticketList.innerHTML = '<tr><td colspan="8">Debes iniciar sesión para ver los tickets.</td></tr>';
         return;
       }
@@ -577,47 +636,82 @@
       if (category && category !== 'Todas') params.append('category', category);
 
       const query = `/api/tickets?${params.toString()}`;
-      console.log('Fetching tickets with URL:', query);
 
       try {
         const response = await fetch(query);
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
         const tickets = await response.json();
-        ticketList.innerHTML = '';
-        if (tickets.length === 0) {
-          ticketList.innerHTML = '<tr><td colspan="8">No hay tickets para este criterio.</td></tr>';
-          return;
-        }
-        tickets.forEach(ticket => {
-          const row = document.createElement('tr');
-          row.style.cursor = 'pointer';
-          row.onclick = () => showTicketDetails(ticket);
-          const statusClass = ticket.status === 'Pendiente' ? 'status-pending' :
-                            ticket.status === 'En Proceso' ? 'status-in-progress' :
-                            'status-resolved';
-          const isResolved = ticket.status === 'Resuelto';
-          const isAdmin = currentUser.role === 'admin';
-          const editDisabled = isResolved && !isAdmin ? 'disabled' : '';
-          row.innerHTML = `
-            <td>${ticket.id}</td>
-            <td>${ticket.requester}</td>
-            <td>${ticket.created_at}</td>
-            <td>${ticket.priority}</td>
-            <td>${ticket.category || 'No especificada'}</td>
-            <td>${ticket.subcategory || 'No especificada'}</td>
-            <td class="${statusClass}">${ticket.status}</td>
-            <td>${ticket.assigned_username || 'No asignado'}</td>
-            <td><button ${editDisabled} onclick="editTicket(${ticket.id}); event.stopPropagation()">Editar</button></td>
-          `;
-          row.querySelector('button').dataset.ticket = JSON.stringify(ticket);
-          ticketList.appendChild(row);
-        });
+        // Ordena por fecha descendente
+        ticketsData = tickets.sort((a, b) => parsearFechaTicket(b.created_at) - parsearFechaTicket(a.created_at));
+        ticketsPaginaActual = 1;
+        renderizarPaginaTickets();
       } catch (err) {
-        console.error('Error fetching tickets:', err);
         ticketList.innerHTML = '<tr><td colspan="8">Error al cargar tickets.</td></tr>';
       }
+    }
+
+    function renderizarPaginaTickets() {
+      const ticketList = document.getElementById('ticketList');
+      ticketList.innerHTML = '';
+      const inicio = (ticketsPaginaActual - 1) * ticketsFilasPorPagina;
+      const fin = inicio + ticketsFilasPorPagina;
+      const pagina = ticketsData.slice(inicio, fin);
+
+      if (pagina.length === 0) {
+        ticketList.innerHTML = '<tr><td colspan="10">No hay tickets para este criterio.</td></tr>';
+        return;
+      }
+      pagina.forEach(ticket => {
+        const row = document.createElement('tr');
+        row.style.cursor = 'pointer';
+        row.onclick = () => showTicketDetails(ticket);
+        const statusClass = ticket.status === 'Pendiente' ? 'status-pending' :
+                          ticket.status === 'En Proceso' ? 'status-in-progress' :
+                          'status-resolved';
+        const isResolved = ticket.status === 'Resuelto';
+        const isAdmin = currentUser.role === 'admin';
+        const editDisabled = isResolved && !isAdmin ? 'disabled' : '';
+        row.innerHTML = `
+          <td>${ticket.id}</td>
+          <td>${ticket.requester}</td>
+          <td>${ticket.created_at}</td>
+          <td>${ticket.priority}</td>
+          <td>${ticket.category || 'No especificada'}</td>
+          <td>${ticket.subcategory || 'No especificada'}</td>
+          <td class="${statusClass}">${ticket.status}</td>
+          <td>${ticket.assigned_username || 'No asignado'}</td>
+          <td><button ${editDisabled} onclick="editTicket(${ticket.id}); event.stopPropagation()">Editar</button></td>
+        `;
+        row.querySelector('button').dataset.ticket = JSON.stringify(ticket);
+        ticketList.appendChild(row);
+      });
+      renderizarControlesPaginacionTickets();
+    }
+
+    function renderizarControlesPaginacionTickets() {
+      let paginacionDiv = document.getElementById('ticketsPaginacion');
+      if (!paginacionDiv) {
+        paginacionDiv = document.createElement('div');
+        paginacionDiv.id = 'ticketsPaginacion';
+        paginacionDiv.style.marginTop = '10px';
+        document.getElementById('viewTicketsSection').appendChild(paginacionDiv);
+      }
+      const totalPaginas = Math.ceil(ticketsData.length / ticketsFilasPorPagina);
+      let html = '';
+      if (totalPaginas > 1) {
+        html += `<button onclick="cambiarPaginaTickets(-1)" ${ticketsPaginaActual === 1 ? 'disabled' : ''}>Anterior</button>`;
+        html += ` Página ${ticketsPaginaActual} de ${totalPaginas} `;
+        html += `<button onclick="cambiarPaginaTickets(1)" ${ticketsPaginaActual === totalPaginas ? 'disabled' : ''}>Siguiente</button>`;
+      }
+      paginacionDiv.innerHTML = html;
+    }
+
+    function cambiarPaginaTickets(direccion) {
+      const totalPaginas = Math.ceil(ticketsData.length / ticketsFilasPorPagina);
+      ticketsPaginaActual += direccion;
+      if (ticketsPaginaActual < 1) ticketsPaginaActual = 1;
+      if (ticketsPaginaActual > totalPaginas) ticketsPaginaActual = totalPaginas;
+      renderizarPaginaTickets();
     }
 
     async function listMyTickets() {
@@ -627,7 +721,6 @@
       const category = document.getElementById('myFilterCategory').value;
 
       if (!currentUser || !currentUser.id || !currentUser.username) {
-        console.error('Usuario no autenticado o datos incompletos:', currentUser);
         ticketList.innerHTML = '<tr><td colspan="8">Debes iniciar sesión para ver tus tickets.</td></tr>';
         return;
       }
@@ -640,43 +733,77 @@
       if (category && category !== 'Todas') params.append('category', category);
 
       const query = `/api/tickets?${params.toString()}`;
-      console.log('Solicitud a:', query);
 
       try {
         const response = await fetch(query);
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
         const tickets = await response.json();
-        ticketList.innerHTML = '';
-        if (tickets.length === 0) {
-          ticketList.innerHTML = '<tr><td colspan="8">No has creado tickets que coincidan con este criterio.</td></tr>';
-          return;
-        }
-        tickets.forEach(ticket => {
-          const row = document.createElement('tr');
-          row.style.cursor = 'pointer';
-          row.onclick = () => showTicketDetails(ticket, false);
-          const statusClass = ticket.status === 'Pendiente' ? 'status-pending' :
-                            ticket.status === 'En Proceso' ? 'status-in-progress' :
-                            'status-resolved';
-          row.innerHTML = `
-            <td>${ticket.id}</td>
-            <td>${ticket.requester}</td>
-            <td>${ticket.created_at}</td>
-            <td>${ticket.priority}</td>
-            <td>${ticket.category || 'No especificada'}</td>
-            <td>${ticket.subcategory || 'No especificada'}</td>
-            <td class="${statusClass}">${ticket.status}</td>
-            <td>${ticket.assigned_username || 'No asignado'}</td>
-            <td><button onclick="showTicketDetails(JSON.parse(JSON.stringify(${JSON.stringify(ticket)})), false); event.stopPropagation()">Ver</button></td>
-          `;
-          ticketList.appendChild(row);
-        });
+        myTicketsData = tickets.sort((a, b) => parsearFechaTicket(b.created_at) - parsearFechaTicket(a.created_at));
+        myTicketsPaginaActual = 1;
+        renderizarPaginaMyTickets();
       } catch (err) {
-        console.error('Error fetching my tickets:', err);
         ticketList.innerHTML = '<tr><td colspan="8">Error al cargar tus tickets.</td></tr>';
       }
+    }
+
+    function renderizarPaginaMyTickets() {
+      const ticketList = document.getElementById('myTicketList');
+      ticketList.innerHTML = '';
+      const inicio = (myTicketsPaginaActual - 1) * myTicketsFilasPorPagina;
+      const fin = inicio + myTicketsFilasPorPagina;
+      const pagina = myTicketsData.slice(inicio, fin);
+
+      if (pagina.length === 0) {
+        ticketList.innerHTML = '<tr><td colspan="10">No has creado tickets que coincidan con este criterio.</td></tr>';
+        return;
+      }
+      pagina.forEach(ticket => {
+        const row = document.createElement('tr');
+        row.style.cursor = 'pointer';
+        row.onclick = () => showTicketDetails(ticket, false);
+        const statusClass = ticket.status === 'Pendiente' ? 'status-pending' :
+                          ticket.status === 'En Proceso' ? 'status-in-progress' :
+                          'status-resolved';
+        row.innerHTML = `
+          <td>${ticket.id}</td>
+          <td>${ticket.requester}</td>
+          <td>${ticket.created_at}</td>
+          <td>${ticket.priority}</td>
+          <td>${ticket.category || 'No especificada'}</td>
+          <td>${ticket.subcategory || 'No especificada'}</td>
+          <td class="${statusClass}">${ticket.status}</td>
+          <td>${ticket.assigned_username || 'No asignado'}</td>
+          <td><button onclick="showTicketDetails(JSON.parse(JSON.stringify(${JSON.stringify(ticket)})), false); event.stopPropagation()">Ver</button></td>
+        `;
+        ticketList.appendChild(row);
+      });
+      renderizarControlesPaginacionMyTickets();
+    }
+
+    function renderizarControlesPaginacionMyTickets() {
+      let paginacionDiv = document.getElementById('myTicketsPaginacion');
+      if (!paginacionDiv) {
+        paginacionDiv = document.createElement('div');
+        paginacionDiv.id = 'myTicketsPaginacion';
+        paginacionDiv.style.marginTop = '10px';
+        document.getElementById('myTicketsSection').appendChild(paginacionDiv);
+      }
+      const totalPaginas = Math.ceil(myTicketsData.length / myTicketsFilasPorPagina);
+      let html = '';
+      if (totalPaginas > 1) {
+        html += `<button onclick="cambiarPaginaMyTickets(-1)" ${myTicketsPaginaActual === 1 ? 'disabled' : ''}>Anterior</button>`;
+        html += ` Página ${myTicketsPaginaActual} de ${totalPaginas} `;
+        html += `<button onclick="cambiarPaginaMyTickets(1)" ${myTicketsPaginaActual === totalPaginas ? 'disabled' : ''}>Siguiente</button>`;
+      }
+      paginacionDiv.innerHTML = html;
+    }
+
+    function cambiarPaginaMyTickets(direccion) {
+      const totalPaginas = Math.ceil(myTicketsData.length / myTicketsFilasPorPagina);
+      myTicketsPaginaActual += direccion;
+      if (myTicketsPaginaActual < 1) myTicketsPaginaActual = 1;
+      if (myTicketsPaginaActual > totalPaginas) myTicketsPaginaActual = totalPaginas;
+      renderizarPaginaMyTickets();
     }
 
     async function autoAssignTicket(id) {
@@ -1113,6 +1240,127 @@ async function showTicketDetails(ticket, editMode = false) {
       } catch (err) {
         error.textContent = 'Error en el servidor';
       }
+    }
+
+    function parsearFechaAuditoria(fechaStr) {
+      // fechaStr: "30/06/2025 10:36:51"
+      const [fecha, hora] = fechaStr.split(' ');
+      const [dia, mes, anio] = fecha.split('/');
+      return new Date(`${anio}-${mes}-${dia}T${hora}`);
+    }
+
+    function mostrarTablaAuditoria(auditoria) {
+      auditoriaData = auditoria.sort((a, b) => {
+        return parsearFechaAuditoria(b.fecha) - parsearFechaAuditoria(a.fecha);
+      });
+      auditoriaPaginaActual = 1;
+      renderizarPaginaAuditoria();
+    }
+
+    function renderizarPaginaAuditoria() {
+      const tbody = document.getElementById('auditoriaTableBody');
+      tbody.innerHTML = '';
+      const inicio = (auditoriaPaginaActual - 1) * auditoriaFilasPorPagina;
+      const fin = inicio + auditoriaFilasPorPagina;
+      const pagina = auditoriaData.slice(inicio, fin);
+
+      if (pagina.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5">No hay registros</td></tr>`;
+        return;
+      }
+
+      pagina.forEach(a => {
+        tbody.innerHTML += `
+          <tr>
+            <td>${a.fecha}</td>
+            <td>${a.username}</td>
+            <td>${a.accion}</td>
+            <td>${a.descripcion}</td>
+            <td>${a.ip}</td>
+          </tr>
+        `;
+      });
+
+      renderizarControlesPaginacionAuditoria();
+    }
+
+    function renderizarControlesPaginacionAuditoria() {
+      let paginacionDiv = document.getElementById('auditoriaPaginacion');
+      if (!paginacionDiv) {
+        paginacionDiv = document.createElement('div');
+        paginacionDiv.id = 'auditoriaPaginacion';
+        paginacionDiv.style.marginTop = '10px';
+        document.getElementById('auditoriaSection').appendChild(paginacionDiv);
+      }
+      const totalPaginas = Math.ceil(auditoriaData.length / auditoriaFilasPorPagina);
+      let html = '';
+      if (totalPaginas > 1) {
+        html += `<button onclick="cambiarPaginaAuditoria(-1)" ${auditoriaPaginaActual === 1 ? 'disabled' : ''}>Anterior</button>`;
+        html += ` Página ${auditoriaPaginaActual} de ${totalPaginas} `;
+        html += `<button onclick="cambiarPaginaAuditoria(1)" ${auditoriaPaginaActual === totalPaginas ? 'disabled' : ''}>Siguiente</button>`;
+      }
+      paginacionDiv.innerHTML = html;
+    }
+
+    function cambiarPaginaAuditoria(direccion) {
+      const totalPaginas = Math.ceil(auditoriaData.length / auditoriaFilasPorPagina);
+      auditoriaPaginaActual += direccion;
+      if (auditoriaPaginaActual < 1) auditoriaPaginaActual = 1;
+      if (auditoriaPaginaActual > totalPaginas) auditoriaPaginaActual = totalPaginas;
+      renderizarPaginaAuditoria();
+    }
+
+    async function mostrarAuditoria() {
+      document.getElementById('mainMenu').style.display = 'none';
+      document.getElementById('auditoriaSection').style.display = 'block';
+      const adminId = currentUser.id;
+      const res = await fetch(`/api/auditoria?adminId=${adminId}`);
+      const auditoria = await res.json();
+      mostrarTablaAuditoria(auditoria);
+      await llenarSelectAcciones();
+    }
+
+    function aplicarFiltrosAuditoria() {
+      const fecha = document.getElementById('filtroFecha').value;
+      const usuario = document.getElementById('filtroUsuario').value;
+      const accion = document.getElementById('filtroAccion').value;
+      const params = new URLSearchParams();
+      params.append('adminId', currentUser.id);
+      if (fecha) params.append('fecha', fecha);
+      if (usuario) params.append('usuario', usuario);
+      if (accion) params.append('accion', accion);
+
+      fetch('/api/auditoria?' + params.toString())
+        .then(res => res.json())
+        .then(data => mostrarTablaAuditoria(data));
+    }
+
+    async function llenarSelectAcciones() {
+      const adminId = currentUser.id;
+      const res = await fetch(`/api/auditoria?adminId=${adminId}`);
+      const auditoria = await res.json();
+      const acciones = new Set();
+      if (Array.isArray(auditoria)) {
+        auditoria.forEach(a => {
+          if (a.accion) acciones.add(a.accion);
+        });
+      }
+      const select = document.getElementById('filtroAccion');
+      select.innerHTML = '<option value="">Todas</option>';
+      Array.from(acciones).sort().forEach(accion => {
+        select.innerHTML += `<option value="${accion}">${accion}</option>`;
+      });
+    }
+
+    function descargarAuditoriaExcel() {
+      const tabla = document.getElementById('tablaAuditoria');
+      const wb = XLSX.utils.table_to_book(tabla, { sheet: "Auditoría" });
+      XLSX.writeFile(wb, "auditoria.xlsx");
+    }
+
+    function backToMenu() {
+      document.getElementById('auditoriaSection').style.display = 'none';
+      showAdminSection();
     }
     
   </script>
