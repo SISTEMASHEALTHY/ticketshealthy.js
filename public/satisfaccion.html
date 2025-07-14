@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Califica tu satisfacción</title>
+</head>
+<body>
+  <h2>¿Estás satisfecho con la atención de tu ticket?</h2>
+  <button onclick="enviarSatisfaccion('Satisfecho')">Sí, satisfecho</button>
+  <button onclick="enviarSatisfaccion('No Satisfecho')">No, no satisfecho</button>
+  <p id="mensaje"></p>
+  <script>
+    function getTicketId() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('ticket');
+    }
+    function enviarSatisfaccion(valor) {
+      fetch(`/api/tickets/${getTicketId()}/satisfaccion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ satisfaccion: valor })
+      })
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('mensaje').textContent = data.message || data.error;
+      });
+    }
+  </script>
+</body>
+</html>

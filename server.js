@@ -771,13 +771,32 @@ app.put('/api/tickets/:id', upload.single('file'), async (req, res) => {
   }
 
   try {
-    // ... (tu lógica de permisos igual) ...
     await pool.query('UPDATE tickets SET status = ? WHERE id = ?', [status, id]);
     await pool.query(
       'INSERT INTO ticket_status_history (ticket_id, status, changed_at, observations, user_id, attachment) VALUES (?, ?, NOW(), ?, ?, ?)',
       [id, status, observations || '', userId, file]
     );
     await registrarAuditoria(userId, null, 'Actualizar estado', `Ticket ${id} actualizado a ${status}`, req);
+    if (status === 'Resuelto') {
+    // Obtener datos del ticket y usuario solicitante
+    const [ticketRows] = await pool.query('SELECT requester, user_id FROM tickets WHERE id = ?', [id]);
+    if (ticketRows.length > 0) {
+      const ticket = ticketRows[0];
+      const [userRows] = await pool.query('SELECT email FROM users WHERE id = ?', [ticket.user_id]);
+      if (userRows.length > 0) {
+        const email = userRows[0].email;
+        // Enlace para calificar satisfacción
+        const link = `${process.env.FRONTEND_URL}/satisfaccion.html?ticket=${id}`;
+        const mailOptions = {
+          from: process.env.SMTP_FROM,
+          to: email,
+          subject: `Tu ticket #${id} ha sido cerrado`,
+          text: `Hola ${ticket.requester},\n\nTu ticket #${id} ha sido cerrado.\n\nPor favor, ayúdanos a mejorar calificando tu satisfacción:\n${link}\n\n¡Gracias!`
+        };
+        await transporter.sendMail(mailOptions);
+      }
+    }
+  }
     res.json({ message: 'Estado actualizado' });
   } catch (error) {
     console.error('Error en /api/tickets/:id:', error);
@@ -929,6 +948,15 @@ async function sendAssignedTicketEmail(ticketId, assignedUser, ticket) {
   }
 }
 
+app.post('/api/tickets/:id/satisfaccion', async (req, res) => {
+  const { id } = req.params;
+  const { satisfaccion } = req.body; // 'Satisfecho' o 'No Satisfecho'
+  if (!['Satisfecho', 'No Satisfecho'].includes(satisfaccion)) {
+    return res.status(400).json({ error: 'Valor de satisfacción inválido' });
+  }
+  await pool.query('UPDATE tickets SET satisfaccion = ? WHERE id = ?', [satisfaccion, id]);
+  res.json({ message: '¡Gracias por tu respuesta!' });
+});
 
 // SOLICITANTES QUE MÁS TICKETS CREAN
 app.get('/api/dashboard/solicitantes-top', async (req, res) => {
