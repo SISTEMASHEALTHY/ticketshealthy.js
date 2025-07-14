@@ -1317,10 +1317,15 @@ async function showTicketDetails(ticket, editMode = false) {
     }
 
     async function mostrarAuditoria() {
+      document.getElementById('adminSection').style.display = 'none';
       document.getElementById('auditoriaSection').style.display = 'block';
       const adminId = currentUser.id;
       const res = await fetch(`/api/auditoria?adminId=${adminId}`);
       const auditoria = await res.json();
+      if (auditoria.error) {
+        alert(auditoria.error);
+        return;
+      }
       mostrarTablaAuditoria(auditoria);
       await llenarSelectAcciones();
     }
