@@ -392,6 +392,12 @@
       document.getElementById('adminSection').style.display = 'block';
       document.getElementById('ticketSystem').style.display = 'none';
       listUsers();
+        // MOSTRAR BOTÓN DE AUDITORÍA SOLO SI ES ADMIN
+      if (currentUser && currentUser.role === 'admin') {
+        document.getElementById('btnAuditoria').style.display = 'inline-block';
+      } else {
+        document.getElementById('btnAuditoria').style.display = 'none';
+      }
     }
 
     function showTicketSystem() {
