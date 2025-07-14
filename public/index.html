@@ -1271,8 +1271,6 @@ async function showTicketDetails(ticket, editMode = false) {
       const fin = inicio + auditoriaFilasPorPagina;
       const pagina = auditoriaData.slice(inicio, fin);
 
-      console.log('Página de auditoría a mostrar:', pagina);
-
       if (pagina.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5">No hay registros</td></tr>`;
         return;
