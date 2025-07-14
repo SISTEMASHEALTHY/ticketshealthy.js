@@ -1089,6 +1089,20 @@ async function showTicketDetails(ticket, editMode = false) {
           </button>`;
         }
       }
+     if (ticket.status === 'Resuelto' && currentUser && ticket.requester === currentUser.username) {
+       if (ticket.satisfaccion) {
+         detailsHtml += `<p><strong>Tu satisfacción:</strong> ${ticket.satisfaccion}</p>`;
+       } else {
+         detailsHtml += `
+           <div id="satisfaccionForm">
+             <h3>¿Estás satisfecho con la atención de tu ticket?</h3>
+             <button onclick="enviarSatisfaccionTicket(${ticket.id}, 'Satisfecho')">Sí, satisfecho</button>
+             <button onclick="enviarSatisfaccionTicket(${ticket.id}, 'No Satisfecho')">No, no satisfecho</button>
+             <p id="mensajeSatisfaccion"></p>
+           </div>
+         `;
+       }
+     }
 
       statusHistory.innerHTML = historyHtml;
     }
@@ -1139,6 +1153,25 @@ async function showTicketDetails(ticket, editMode = false) {
     "Hardware": ["Impresoras", "Monitores", "Teclados", "Otros"]
   }
 };
+
+  function enviarSatisfaccionTicket(ticketId, valor) {
+    fetch(`/api/tickets/${ticketId}/satisfaccion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ satisfaccion: valor })
+    })
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById('mensajeSatisfaccion').textContent = data.message || data.error;
+      // Opcional: deshabilitar los botones después de responder
+      if (data.message) {
+        const form = document.getElementById('satisfaccionForm');
+        if (form) {
+          form.querySelectorAll('button').forEach(btn => btn.disabled = true);
+        }
+      }
+    });
+  }
 
   function updateCategories() {
     const department = document.getElementById('department').value;

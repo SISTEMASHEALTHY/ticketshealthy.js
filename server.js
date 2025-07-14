@@ -791,7 +791,7 @@ app.put('/api/tickets/:id', upload.single('file'), async (req, res) => {
           from: process.env.SMTP_FROM,
           to: email,
           subject: `Tu ticket #${id} ha sido cerrado`,
-          text: `Hola ${ticket.requester},\n\nTu ticket #${id} ha sido cerrado.\n\nPor favor, ayúdanos a mejorar calificando tu satisfacción:\n${link}\n\n¡Gracias!`
+          text: `Hola ${ticket.requester},\n\nTu ticket #${id} ha sido cerrado.\n\nPor favor, ayúdanos a mejorar calificando tu satisfacción\n¡Gracias!`
         };
         await transporter.sendMail(mailOptions);
       }
