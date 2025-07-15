@@ -954,6 +954,10 @@ app.post('/api/tickets/:id/satisfaccion', async (req, res) => {
   if (!['Satisfecho', 'No Satisfecho'].includes(satisfaccion)) {
     return res.status(400).json({ error: 'Valor de satisfacción inválido' });
   }
+  const [rows] = await pool.query('SELECT satisfaccion FROM tickets WHERE id = ?', [id]);
+  if (rows.length && rows[0].satisfaccion) {
+    return res.status(400).json({ error: 'Ya has calificado este ticket.' });
+  }
   // Actualiza el campo de satisfacción
   await pool.query('UPDATE tickets SET satisfaccion = ? WHERE id = ?', [satisfaccion, id]);
   // Inserta en el historial

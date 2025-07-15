@@ -1164,14 +1164,17 @@ async function showTicketDetails(ticket, editMode = false) {
     .then(data => {
       document.getElementById('mensajeSatisfaccion').textContent = data.message || data.error;
       if (data.message) {
-        // Recargar el ticket actualizado y mostrar el detalle
-        fetch(`/api/tickets?ticketId=${ticketId}&userId=${currentUser.id}`)
-          .then(res => res.json())
-          .then(tickets => {
-            if (tickets && tickets.length > 0) {
-              showTicketDetails(tickets[0]);
-            }
-          });
+        // Espera un momento para que el backend actualice
+        setTimeout(() => {
+          // Vuelve a pedir el ticket actualizado y muestra el detalle
+          fetch(`/api/tickets?ticketId=${ticketId}&userId=${currentUser.id}`)
+            .then(res => res.json())
+            .then(tickets => {
+              if (tickets && tickets.length > 0) {
+                showTicketDetails(tickets[0]);
+              }
+            });
+        }, 500); // medio segundo de espera para asegurar que el backend ya guardó
       }
     });
   }
