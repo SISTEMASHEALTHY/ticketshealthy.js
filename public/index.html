@@ -1163,12 +1163,15 @@ async function showTicketDetails(ticket, editMode = false) {
     .then(res => res.json())
     .then(data => {
       document.getElementById('mensajeSatisfaccion').textContent = data.message || data.error;
-      // Opcional: deshabilitar los botones después de responder
       if (data.message) {
-        const form = document.getElementById('satisfaccionForm');
-        if (form) {
-          form.querySelectorAll('button').forEach(btn => btn.disabled = true);
-        }
+        // Recargar el ticket actualizado y mostrar el detalle
+        fetch(`/api/tickets?ticketId=${ticketId}&userId=${currentUser.id}`)
+          .then(res => res.json())
+          .then(tickets => {
+            if (tickets && tickets.length > 0) {
+              showTicketDetails(tickets[0]);
+            }
+          });
       }
     });
   }
