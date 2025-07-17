@@ -349,6 +349,7 @@
   </div>
 
   <script>
+    let editUserId = null; 
     let currentUser = null;
     let availableUsers = [];
     let ticketsData = [];
@@ -538,10 +539,82 @@
       }
     }
 
-    function editarUsuario(userId) {
-      // Aquí puedes abrir un modal o formulario para editar los datos del usuario
-      alert('Funcionalidad de edición para el usuario ID: ' + userId);
-      // Puedes cargar los datos y permitir editarlos, luego hacer un fetch PUT al backend
+    async function editarUsuario(userId) {
+      // Busca el usuario en la lista actual
+      const response = await fetch(`/api/users?adminId=${currentUser.id}`);
+      const users = await response.json();
+      const user = users.find(u => u.id === userId);
+      if (!user) return alert('Usuario no encontrado');
+      // Llena los campos del formulario
+      document.getElementById('registerUsername').value = user.username;
+      document.getElementById('registerUsername').disabled = true;
+      document.getElementById('registerPassword').value = '';
+      document.getElementById('registerPassword').placeholder = '(Dejar en blanco para no cambiar)';
+      document.getElementById('registerEmail').value = user.email;
+      document.getElementById('registerDepartment').value = user.department;
+      document.getElementById('registerRole').value = user.role;
+      editUserId = user.id;
+      // Cambia el botón
+      let btn = document.querySelector('.form-section button');
+      btn.textContent = 'Actualizar Usuario';
+      btn.onclick = actualizarUsuario;
+      // Agrega botón cancelar si no existe
+      if (!document.getElementById('cancelEditUser')) {
+        let cancelBtn = document.createElement('button');
+        cancelBtn.id = 'cancelEditUser';
+        cancelBtn.textContent = 'Cancelar';
+        cancelBtn.type = 'button';
+        cancelBtn.style.marginLeft = '10px';
+        cancelBtn.onclick = cancelarEdicionUsuario;
+        btn.parentNode.insertBefore(cancelBtn, btn.nextSibling);
+      }
+    }
+
+    async function actualizarUsuario() {
+      const username = document.getElementById('registerUsername').value;
+      const password = document.getElementById('registerPassword').value;
+      const email = document.getElementById('registerEmail').value;
+      const department = document.getElementById('registerDepartment').value;
+      const role = document.getElementById('registerRole').value;
+      const error = document.getElementById('registerError');
+      if (!email || !email.includes('@')) {
+        error.textContent = 'Por favor, ingresa un correo electrónico válido';
+        return;
+      }
+      try {
+        const response = await fetch(`/api/users/${editUserId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, email, department, role, adminId: currentUser.id })
+        });
+        const data = await response.json();
+        if (data.error) {
+          error.textContent = data.error;
+          return;
+        }
+        alert('Usuario actualizado');
+        cancelarEdicionUsuario();
+        listUsers();
+      } catch (err) {
+        error.textContent = 'Error en el servidor';
+      }
+    }
+
+    function cancelarEdicionUsuario() {
+      editUserId = null;
+      document.getElementById('registerUsername').value = '';
+      document.getElementById('registerUsername').disabled = false;
+      document.getElementById('registerPassword').value = '';
+      document.getElementById('registerPassword').placeholder = 'Contraseña';
+      document.getElementById('registerEmail').value = '';
+      document.getElementById('registerDepartment').value = 'Mantenimiento';
+      document.getElementById('registerRole').value = 'user';
+      let btn = document.querySelector('.form-section button');
+      btn.textContent = 'Crear Usuario';
+      btn.onclick = register;
+      let cancelBtn = document.getElementById('cancelEditUser');
+      if (cancelBtn) cancelBtn.remove();
+      document.getElementById('registerError').textContent = '';
     }
 
     function eliminarUsuario(userId) {

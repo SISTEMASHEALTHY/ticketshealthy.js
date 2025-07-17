@@ -388,6 +388,45 @@ app.get('/api/users/available', async (req, res) => {
   }
 });
 
+// Actualizar usuario (admin only)
+app.put('/api/users/:id', async (req, res) => {
+  const { id } = req.params;
+  const { username, password, email, department, role, adminId } = req.body;
+  try {
+    // Solo admin puede editar
+    const [admins] = await pool.query('SELECT * FROM users WHERE id = ? AND role = "admin"', [adminId]);
+    if (admins.length === 0) {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+    // No permitir cambiar el username
+    const [users] = await pool.query('SELECT * FROM users WHERE id = ?', [id]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    // Validar email
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Correo electrónico inválido' });
+    }
+    // Si se envía password, actualizarla; si no, dejar la actual
+    if (password && password.trim() !== '') {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await pool.query(
+        'UPDATE users SET email = ?, department = ?, role = ?, password = ? WHERE id = ?',
+        [email, department, role, hashedPassword, id]
+      );
+    } else {
+      await pool.query(
+        'UPDATE users SET email = ?, department = ?, role = ? WHERE id = ?',
+        [email, department, role, id]
+      );
+    }
+    await registrarAuditoria(adminId, username, 'Editar usuario', `Usuario editado: ${username}`, req);
+    res.json({ message: 'Usuario actualizado' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al actualizar usuario' });
+  }
+});
+
 // Endpoint: Change password
 app.put('/api/users/:id/password', async (req, res) => {
   const { id } = req.params;
