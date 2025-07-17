@@ -846,7 +846,7 @@ app.put('/api/tickets/:id/transfer', async (req, res) => {
           let asunto = `Actualización de tu ticket #${id}`;
           let texto = `Hola ${ticket.requester},\n\nEl estado de tu ticket #${id} ha cambiado a: ${status}.\n\n`;
           if (status === 'Resuelto') {
-            texto += 'Tu ticket ha sido resuelto.\n¡Gracias!';
+            texto += 'Tu ticket ha sido resuelto. te invitamos a contestaron la encuesta de satisfacción en el mismo ticket\n¡Gracias!';
           } else if (status === 'En Proceso') {
             texto += 'Tu ticket está siendo atendido por el equipo de soporte.';
           } else if (status === 'Pendiente') {

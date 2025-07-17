@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Bitácora de Auditoría</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f3f4f6; color: #222; }
+    table { border-collapse: collapse; width: 100%; background: #fff; margin-top: 2rem; }
+    th, td { border: 1px solid #ccc; padding: 0.7rem; text-align: center; }
+    th { background: #FF0000; color: #fff; }
+    tr:nth-child(even) { background: #f9fafb; }
+  </style>
+</head>
+<body>
+  <h1>Bitácora de Auditoría</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Usuario</th>
+        <th>Acción</th>
+        <th>Descripción</th>
+        <th>IP</th>
+      </tr>
+    </thead>
+    <tbody id="auditoriaTableBody"></tbody>
+  </table>
+  <script>
+    // Cambia el ID por el de un admin válido
+    const adminId = 1; // <-- AJUSTA ESTE VALOR SI ES NECESARIO
+
+    fetch(`/api/auditoria?adminId=${adminId}`)
+      .then(res => res.json())
+      .then(data => {
+        const tbody = document.getElementById('auditoriaTableBody');
+        if (!Array.isArray(data) || data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5">No hay registros</td></tr>';
+          return;
+        }
+        data.forEach(a => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${a.fecha}</td>
+            <td>${a.username}</td>
+            <td>${a.accion}</td>
+            <td>${a.descripcion}</td>
+            <td>${a.ip}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(err => {
+        document.getElementById('auditoriaTableBody').innerHTML = `<tr><td colspan="5">Error: ${err.message}</td></tr>`;
+      });
+  </script>
+</body>
+</html>
