@@ -786,7 +786,7 @@ app.put('/api/tickets/:id', upload.single('file'), async (req, res) => {
       if (userRows.length > 0) {
         const email = userRows[0].email;
         // Enlace para calificar satisfacción
-        const link = `${process.env.FRONTEND_URL}/satisfaccion.html?ticket=${id}`;
+        const link = `${process.env.FRONTEND_URL}`;
         const mailOptions = {
           from: process.env.SMTP_FROM,
           to: email,
