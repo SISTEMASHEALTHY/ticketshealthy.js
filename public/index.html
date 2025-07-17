@@ -528,11 +528,38 @@
             <p><strong>Correo:</strong> ${user.email}</p>
             <p><strong>Departamento:</strong> ${user.department}</p>
             <p><strong>Rol:</strong> ${user.role}</p>
+            <button onclick="editarUsuario(${user.id})">Editar</button>
+            <button onclick="eliminarUsuario(${user.id})" style="background:#e74c3c;color:#fff;">Eliminar</button>
           `;
           userList.appendChild(userDiv);
         });
       } catch (err) {
         userList.innerHTML = '<p>Error al cargar usuarios.</p>';
+      }
+    }
+
+    function editarUsuario(userId) {
+      // Aquí puedes abrir un modal o formulario para editar los datos del usuario
+      alert('Funcionalidad de edición para el usuario ID: ' + userId);
+      // Puedes cargar los datos y permitir editarlos, luego hacer un fetch PUT al backend
+    }
+
+    function eliminarUsuario(userId) {
+      if (confirm('¿Estás seguro de que deseas eliminar este usuario?')) {
+        fetch(`/api/users/${userId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminId: currentUser.id })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) {
+            alert(data.error);
+          } else {
+            alert('Usuario eliminado correctamente');
+            listUsers();
+          }
+        });
       }
     }
 

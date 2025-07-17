@@ -344,6 +344,25 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
+app.delete('/api/users/:id', async (req, res) => {
+  const { id } = req.params;
+  const { adminId } = req.body;
+  try {
+    const [admins] = await pool.query('SELECT * FROM users WHERE id = ? AND role = "admin"', [adminId]);
+    if (admins.length === 0) {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+    // No permitir que un admin se elimine a sí mismo
+    if (parseInt(id) === parseInt(adminId)) {
+      return res.status(400).json({ error: 'No puedes eliminar tu propio usuario.' });
+    }
+    await pool.query('DELETE FROM users WHERE id = ?', [id]);
+    res.json({ message: 'Usuario eliminado correctamente' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar usuario' });
+  }
+});
+
 // Endpoint: List available users for assignment
 app.get('/api/users/available', async (req, res) => {
   const { userId } = req.query;
