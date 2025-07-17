@@ -258,7 +258,8 @@
     let datosPorAsignado = [];
     let datosPorPrioridad = [];
     let catSubcatChart;
-  let datosCatSubcat = [];
+    let datosCatSubcat = [];
+    let satisfaccionChart;
 
   function getFiltros() {
     const desde = document.getElementById('filtroDesde').value;
@@ -486,9 +487,9 @@
             .then(data => {
               const labels = data.map(row => row.satisfaccion);
               const values = data.map(row => row.total);
-              if (window.satisfaccionChart) window.satisfaccionChart.destroy();
+              if (satisfaccionChart && typeof satisfaccionChart.destroy === 'function') satisfaccionChart.destroy();
               const ctx = document.getElementById('satisfaccionChart').getContext('2d');
-              window.satisfaccionChart = new Chart(ctx, {
+              satisfaccionChart = new Chart(ctx, {
                 type: 'pie',
                 data: {
                   labels: labels,
