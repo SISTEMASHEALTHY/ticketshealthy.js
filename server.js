@@ -818,49 +818,61 @@ app.put('/api/tickets/:id/transfer', async (req, res) => {
   }
 });
 
-// Endpoint: Update ticket status
-app.put('/api/tickets/:id', upload.single('file'), async (req, res) => {
-  const { id } = req.params;
-  const { status, userId, observations } = req.body;
-  const file = req.file ? req.file.path : null; // URL pública de Cloudinary
+  // Endpoint: Update ticket status
+  app.put('/api/tickets/:id', upload.single('file'), async (req, res) => {
+    const { id } = req.params;
+    const { status, userId, observations } = req.body;
+    const file = req.file ? req.file.path : null;
 
-  if (!status || !userId) {
-    return res.status(400).json({ error: 'Faltan campos obligatorios' });
-  }
-
-  try {
-    await pool.query('UPDATE tickets SET status = ? WHERE id = ?', [status, id]);
-    await pool.query(
-      'INSERT INTO ticket_status_history (ticket_id, status, changed_at, observations, user_id, attachment) VALUES (?, ?, NOW(), ?, ?, ?)',
-      [id, status, observations || '', userId, file]
-    );
-    await registrarAuditoria(userId, null, 'Actualizar estado', `Ticket ${id} actualizado a ${status}`, req);
-    if (status === 'Resuelto') {
-    // Obtener datos del ticket y usuario solicitante
-    const [ticketRows] = await pool.query('SELECT requester, user_id FROM tickets WHERE id = ?', [id]);
-    if (ticketRows.length > 0) {
-      const ticket = ticketRows[0];
-      const [userRows] = await pool.query('SELECT email FROM users WHERE id = ?', [ticket.user_id]);
-      if (userRows.length > 0) {
-        const email = userRows[0].email;
-        // Enlace para calificar satisfacción
-        const link = `${process.env.FRONTEND_URL}`;
-        const mailOptions = {
-          from: process.env.SMTP_FROM,
-          to: email,
-          subject: `Tu ticket #${id} ha sido cerrado`,
-          text: `Hola ${ticket.requester},\n\nTu ticket #${id} ha sido cerrado.\n\nPor favor, ayúdanos a mejorar calificando tu satisfacción\n¡Gracias!`
-        };
-        await transporter.sendMail(mailOptions);
-      }
+    if (!status || !userId) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios' });
     }
-  }
-    res.json({ message: 'Estado actualizado' });
-  } catch (error) {
-    console.error('Error en /api/tickets/:id:', error);
-    res.status(500).json({ error: 'Error al actualizar estado', details: error.message });
-  }
-});
+
+    try {
+      await pool.query('UPDATE tickets SET status = ? WHERE id = ?', [status, id]);
+      await pool.query(
+        'INSERT INTO ticket_status_history (ticket_id, status, changed_at, observations, user_id, attachment) VALUES (?, ?, NOW(), ?, ?, ?)',
+        [id, status, observations || '', userId, file]
+      );
+      await registrarAuditoria(userId, null, 'Actualizar estado', `Ticket ${id} actualizado a ${status}`, req);
+
+      const [ticketRows] = await pool.query('SELECT requester, user_id FROM tickets WHERE id = ?', [id]);
+      if (ticketRows.length > 0) {
+        const ticket = ticketRows[0];
+        const [userRows] = await pool.query('SELECT email FROM users WHERE id = ?', [ticket.user_id]);
+        if (userRows.length > 0) {
+          const email = userRows[0].email;
+          // Mensaje personalizado según el estado
+          let asunto = `Actualización de tu ticket #${id}`;
+          let texto = `Hola ${ticket.requester},\n\nEl estado de tu ticket #${id} ha cambiado a: ${status}.\n\n`;
+          if (status === 'Resuelto') {
+            texto += 'Tu ticket ha sido resuelto.\n¡Gracias!';
+          } else if (status === 'En Proceso') {
+            texto += 'Tu ticket está siendo atendido por el equipo de soporte.';
+          } else if (status === 'Pendiente') {
+            texto += 'Tu ticket ha sido recibido y está en espera de ser atendido.';
+          }
+          if (observations) {
+            texto += `\n\nObservaciones: ${observations}`;
+          }
+          texto += '\n\nSaludos,\nEl Sistema de Tickets';
+
+          const mailOptions = {
+            from: process.env.SMTP_FROM,
+            to: email,
+            subject: asunto,
+            text: texto
+          };
+          await transporter.sendMail(mailOptions);
+        }
+      }
+      
+      res.json({ message: 'Estado actualizado' });
+    } catch (error) {
+      console.error('Error en /api/tickets/:id:', error);
+      res.status(500).json({ error: 'Error al actualizar estado', details: error.message });
+    }
+  });
 
 // Endpoint: Reopen ticket (admin only)
 app.put('/api/tickets/:id/reopen', async (req, res) => {
