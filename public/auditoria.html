@@ -5,14 +5,33 @@
   <title>Bitácora de Auditoría</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f3f4f6; color: #222; }
-    table { border-collapse: collapse; width: 100%; background: #fff; margin-top: 2rem; }
+    h1 { color: #FF0000; text-align: center; margin-top: 2rem; }
+    .filtros { display: flex; gap: 1rem; justify-content: center; margin: 1.5rem 0; }
+    .filtros label { font-weight: bold; }
+    .filtros input, .filtros select { padding: 0.3rem 0.5rem; border-radius: 4px; border: 1px solid #ccc; }
+    .filtros button { padding: 0.4rem 1rem; background: #FF0000; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    .filtros button:hover { background: #d10000; }
+    table { border-collapse: collapse; width: 95%; margin: 0 auto; background: #fff; }
     th, td { border: 1px solid #ccc; padding: 0.7rem; text-align: center; }
     th { background: #FF0000; color: #fff; }
     tr:nth-child(even) { background: #f9fafb; }
+    .paginacion { text-align: center; margin: 1.5rem 0; }
+    .paginacion button { margin: 0 0.2rem; padding: 0.3rem 0.8rem; }
   </style>
 </head>
 <body>
   <h1>Bitácora de Auditoría</h1>
+  <div class="filtros">
+    <label>Fecha: <input type="date" id="filtroFecha"></label>
+    <label>Usuario: <input type="text" id="filtroUsuario" placeholder="Usuario"></label>
+    <label>Acción: 
+      <select id="filtroAccion">
+        <option value="">Todas</option>
+      </select>
+    </label>
+    <button onclick="aplicarFiltros()">Filtrar</button>
+    <button onclick="descargarExcel()">Descargar Excel</button>
+  </div>
   <table>
     <thead>
       <tr>
@@ -25,33 +44,104 @@
     </thead>
     <tbody id="auditoriaTableBody"></tbody>
   </table>
+  <div class="paginacion" id="paginacion"></div>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <script>
-    // Cambia el ID por el de un admin válido
-    const adminId = 1; // <-- AJUSTA ESTE VALOR SI ES NECESARIO
+    // Cambia el ID por el de un admin válido si es necesario
+    const adminId = 1;
+    let auditoriaData = [];
+    let paginaActual = 1;
+    const filasPorPagina = 10;
 
-    fetch(`/api/auditoria?adminId=${adminId}`)
-      .then(res => res.json())
-      .then(data => {
-        const tbody = document.getElementById('auditoriaTableBody');
-        if (!Array.isArray(data) || data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5">No hay registros</td></tr>';
-          return;
-        }
-        data.forEach(a => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${a.fecha}</td>
-            <td>${a.username}</td>
-            <td>${a.accion}</td>
-            <td>${a.descripcion}</td>
-            <td>${a.ip}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      })
-      .catch(err => {
-        document.getElementById('auditoriaTableBody').innerHTML = `<tr><td colspan="5">Error: ${err.message}</td></tr>`;
+    async function cargarAuditoria() {
+      const fecha = document.getElementById('filtroFecha').value;
+      const usuario = document.getElementById('filtroUsuario').value;
+      const accion = document.getElementById('filtroAccion').value;
+      const params = new URLSearchParams();
+      params.append('adminId', adminId);
+      if (fecha) params.append('fecha', fecha);
+      if (usuario) params.append('usuario', usuario);
+      if (accion) params.append('accion', accion);
+
+      const res = await fetch('/api/auditoria?' + params.toString());
+      const data = await res.json();
+      auditoriaData = Array.isArray(data) ? data : [];
+      paginaActual = 1;
+      renderizarTabla();
+      llenarSelectAcciones();
+    }
+
+    function renderizarTabla() {
+      const tbody = document.getElementById('auditoriaTableBody');
+      tbody.innerHTML = '';
+      const inicio = (paginaActual - 1) * filasPorPagina;
+      const fin = inicio + filasPorPagina;
+      const pagina = auditoriaData.slice(inicio, fin);
+
+      if (pagina.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5">No hay registros</td></tr>';
+        document.getElementById('paginacion').innerHTML = '';
+        return;
+      }
+
+      pagina.forEach(a => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${a.fecha}</td>
+          <td>${a.username}</td>
+          <td>${a.accion}</td>
+          <td>${a.descripcion}</td>
+          <td>${a.ip}</td>
+        `;
+        tbody.appendChild(tr);
       });
+
+      renderizarPaginacion();
+    }
+
+    function renderizarPaginacion() {
+      const totalPaginas = Math.ceil(auditoriaData.length / filasPorPagina);
+      let html = '';
+      if (totalPaginas > 1) {
+        html += `<button onclick="cambiarPagina(-1)" ${paginaActual === 1 ? 'disabled' : ''}>Anterior</button>`;
+        html += ` Página ${paginaActual} de ${totalPaginas} `;
+        html += `<button onclick="cambiarPagina(1)" ${paginaActual === totalPaginas ? 'disabled' : ''}>Siguiente</button>`;
+      }
+      document.getElementById('paginacion').innerHTML = html;
+    }
+
+    function cambiarPagina(direccion) {
+      const totalPaginas = Math.ceil(auditoriaData.length / filasPorPagina);
+      paginaActual += direccion;
+      if (paginaActual < 1) paginaActual = 1;
+      if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+      renderizarTabla();
+    }
+
+    function aplicarFiltros() {
+      cargarAuditoria();
+    }
+
+    function llenarSelectAcciones() {
+      const select = document.getElementById('filtroAccion');
+      const acciones = new Set();
+      auditoriaData.forEach(a => {
+        if (a.accion) acciones.add(a.accion);
+      });
+      select.innerHTML = '<option value="">Todas</option>';
+      Array.from(acciones).sort().forEach(accion => {
+        select.innerHTML += `<option value="${accion}">${accion}</option>`;
+      });
+    }
+
+    function descargarExcel() {
+      const tabla = document.querySelector('table');
+      const wb = XLSX.utils.table_to_book(tabla, { sheet: "Auditoría" });
+      XLSX.writeFile(wb, "auditoria.xlsx");
+    }
+
+    // Cargar datos al iniciar
+    cargarAuditoria();
   </script>
 </body>
 </html>
