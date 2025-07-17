@@ -242,6 +242,11 @@
     </table>
   </div>
 
+  <div class="card">
+    <h2>Satisfacción de los Tickets Resueltos</h2>
+    <canvas id="satisfaccionChart" width="400" height="200"></canvas>
+  </div>
+
   <script>
     // Variables globales para los charts (para poder destruirlos y recrearlos)
     let solicitantesChart, departamentoChart, tiempoAsignadoChart, estadoChart, asignadoChart;
@@ -474,6 +479,33 @@
               }
             });
           });
+
+          // Tickets por satisfacción (gráfica)
+          fetch('/api/dashboard/tickets-por-satisfaccion' + query)
+            .then(res => res.json())
+            .then(data => {
+              const labels = data.map(row => row.satisfaccion);
+              const values = data.map(row => row.total);
+              if (window.satisfaccionChart) window.satisfaccionChart.destroy();
+              const ctx = document.getElementById('satisfaccionChart').getContext('2d');
+              window.satisfaccionChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                  labels: labels,
+                  datasets: [{
+                    label: 'Satisfacción',
+                    data: values,
+                    backgroundColor: ['#00877A', '#FF6384'],
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  plugins: {
+                    legend: { position: 'bottom' }
+                  }
+                }
+              });
+            });
     }
 
 

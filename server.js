@@ -1209,6 +1209,33 @@ app.get('/api/dashboard/tickets-por-categoria-subcategoria', async (req, res) =>
   }
 });
 
+// TICKETS POR SATISFACCIÓN
+app.get('/api/dashboard/tickets-por-satisfaccion', async (req, res) => {
+  const { desde, hasta, departamento, estado, asignado } = req.query;
+  let where = [];
+  let params = [];
+  if (desde) { where.push('created_at >= ?'); params.push(desde + ' 00:00:00'); }
+  if (hasta) { where.push('created_at <= ?'); params.push(hasta + ' 23:59:59'); }
+  if (departamento) { where.push('department = ?'); params.push(departamento); }
+  if (estado) { where.push('status = ?'); params.push(estado); }
+  if (asignado) { where.push('assigned_to IN (SELECT id FROM users WHERE username LIKE ?)'); params.push('%' + asignado + '%'); }
+  // Solo tickets resueltos y con satisfacción registrada
+  where.push('status = "Resuelto"');
+  where.push('satisfaccion IS NOT NULL');
+  const whereStr = where.length ? ' WHERE ' + where.join(' AND ') : '';
+  try {
+    const [rows] = await pool.query(`
+      SELECT satisfaccion, COUNT(*) AS total
+      FROM tickets
+      ${whereStr}
+      GROUP BY satisfaccion
+    `, params);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener tickets por satisfacción' });
+  }
+});
+
 // En tu server.js
 app.post('/api/checador', async (req, res) => {
   const { user_id, tipo, foto } = req.body;
