@@ -3,20 +3,107 @@
 <head>
   <meta charset="UTF-8">
   <title>Bitácora de Auditoría</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: Arial, sans-serif; background: #f3f4f6; color: #222; }
+    body { font-family: Arial, sans-serif; background: #f3f4f6; color: #222; margin:0; }
     h1 { color: #FF0000; text-align: center; margin-top: 2rem; }
-    .filtros { display: flex; gap: 1rem; justify-content: center; margin: 1.5rem 0; }
+    .filtros {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+      margin: 1.5rem 0;
+      background: #fff;
+      padding: 1rem 0.5rem;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
     .filtros label { font-weight: bold; }
-    .filtros input, .filtros select { padding: 0.3rem 0.5rem; border-radius: 4px; border: 1px solid #ccc; }
-    .filtros button { padding: 0.4rem 1rem; background: #FF0000; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    .filtros input, .filtros select {
+      padding: 0.4rem 0.7rem;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+      margin-right: 0.5rem;
+    }
+    .filtros button {
+      padding: 0.5rem 1.2rem;
+      background: #FF0000;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 1rem;
+      margin-right: 0.5rem;
+      transition: background 0.2s, box-shadow 0.2s;
+      box-shadow: 0 2px 6px rgba(255,0,0,0.08);
+    }
     .filtros button:hover { background: #d10000; }
-    table { border-collapse: collapse; width: 95%; margin: 0 auto; background: #fff; }
-    th, td { border: 1px solid #ccc; padding: 0.7rem; text-align: center; }
-    th { background: #FF0000; color: #fff; }
+    .filtros button:last-child { background: #00877A; }
+    .filtros button:last-child:hover { background: #00695c; }
+    table {
+      border-collapse: collapse;
+      width: 95%;
+      margin: 0 auto;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 0.7rem;
+      text-align: center;
+      font-size: 0.98rem;
+    }
+    th {
+      background: #FF0000;
+      color: #fff;
+    }
     tr:nth-child(even) { background: #f9fafb; }
-    .paginacion { text-align: center; margin: 1.5rem 0; }
-    .paginacion button { margin: 0 0.2rem; padding: 0.3rem 0.8rem; }
+    .paginacion {
+      text-align: center;
+      margin: 1.5rem 0;
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .paginacion button {
+      background: #00877A;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.5rem 1.2rem;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+      box-shadow: 0 2px 6px rgba(0,135,122,0.08);
+    }
+    .paginacion button:disabled {
+      background: #e5e7eb;
+      color: #aaa;
+      cursor: not-allowed;
+    }
+    .paginacion button:hover:not(:disabled) {
+      background: #00695c;
+    }
+    @media (max-width: 800px) {
+      .filtros { flex-direction: column; align-items: stretch; }
+      table { width: 100%; font-size: 0.95rem; }
+      th, td { padding: 0.5rem; font-size: 0.95rem; }
+    }
+    @media (max-width: 500px) {
+      .filtros { padding: 0.5rem; }
+      h1 { font-size: 1.2rem; margin-top: 1rem; }
+      table { font-size: 0.85rem; }
+      th, td { padding: 0.3rem; }
+    }
   </style>
 </head>
 <body>
@@ -52,11 +139,13 @@
     let auditoriaData = [];
     let paginaActual = 1;
     const filasPorPagina = 10;
+    let filtrosActuales = { fecha: '', usuario: '', accion: '' };
 
     async function cargarAuditoria() {
       const fecha = document.getElementById('filtroFecha').value;
       const usuario = document.getElementById('filtroUsuario').value;
       const accion = document.getElementById('filtroAccion').value;
+      filtrosActuales = { fecha, usuario, accion };
       const params = new URLSearchParams();
       params.append('adminId', adminId);
       if (fecha) params.append('fecha', fecha);
@@ -103,9 +192,9 @@
       const totalPaginas = Math.ceil(auditoriaData.length / filasPorPagina);
       let html = '';
       if (totalPaginas > 1) {
-        html += `<button onclick="cambiarPagina(-1)" ${paginaActual === 1 ? 'disabled' : ''}>Anterior</button>`;
-        html += ` Página ${paginaActual} de ${totalPaginas} `;
-        html += `<button onclick="cambiarPagina(1)" ${paginaActual === totalPaginas ? 'disabled' : ''}>Siguiente</button>`;
+        html += `<button onclick="cambiarPagina(-1)" ${paginaActual === 1 ? 'disabled' : ''}>⟨ Anterior</button>`;
+        html += `<span style="margin:0 0.7rem; font-weight:600;">Página ${paginaActual} de ${totalPaginas}</span>`;
+        html += `<button onclick="cambiarPagina(1)" ${paginaActual === totalPaginas ? 'disabled' : ''}>Siguiente ⟩</button>`;
       }
       document.getElementById('paginacion').innerHTML = html;
     }
@@ -135,7 +224,35 @@
     }
 
     function descargarExcel() {
-      const tabla = document.querySelector('table');
+      // Descarga todos los datos filtrados, no solo la página actual
+      if (auditoriaData.length === 0) {
+        alert('No hay datos para descargar.');
+        return;
+      }
+      // Crear una tabla temporal solo con los datos filtrados
+      const tabla = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = `<tr>
+        <th>Fecha</th>
+        <th>Usuario</th>
+        <th>Acción</th>
+        <th>Descripción</th>
+        <th>IP</th>
+      </tr>`;
+      tabla.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      auditoriaData.forEach(a => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${a.fecha}</td>
+          <td>${a.username}</td>
+          <td>${a.accion}</td>
+          <td>${a.descripcion}</td>
+          <td>${a.ip}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tabla.appendChild(tbody);
       const wb = XLSX.utils.table_to_book(tabla, { sheet: "Auditoría" });
       XLSX.writeFile(wb, "auditoria.xlsx");
     }
