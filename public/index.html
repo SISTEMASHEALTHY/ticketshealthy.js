@@ -55,6 +55,7 @@
       <button class="logout" onclick="logout()">Cerrar Sesión</button>
       <button onclick="showTicketSystem()">Ir a Tickets</button>
       <button id="btnAuditoria" style="display:none;" onclick="window.open('auditoria.html', '_blank')">Ver Bitácora de Auditoría</button>
+      <button id="btndashboard" style="display:none;" onclick="window.open('dashboard.html', '_blank')">Ver Dashboard</button>
 
       <div class="form-section">
         <h2>Crear Usuario</h2>
@@ -396,8 +397,10 @@
         // MOSTRAR BOTÓN DE AUDITORÍA SOLO SI ES ADMIN
       if (currentUser && currentUser.role === 'admin') {
         document.getElementById('btnAuditoria').style.display = 'inline-block';
+        document.getElementById('btndashboard').style.display = 'inline-block';
       } else {
         document.getElementById('btnAuditoria').style.display = 'none';
+        document.getElementById('btndashboard').style.display = 'none';
       }
     }
 
