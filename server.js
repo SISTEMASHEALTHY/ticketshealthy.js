@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 const fs = require('fs');
 const moment = require('moment'); // Instala moment si no lo tienes
 require('dotenv').config();
+const axios = require('axios');
 
 // Cloudinary
 const cloudinary = require('cloudinary').v2;
@@ -617,7 +618,8 @@ app.put('/api/tickets/:id/assign', async (req, res) => {
 const PDFDocument = require('pdfkit');
 
 async function generarPDFTicket(ticket, history) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
+    const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ margin: 60 });
     const buffers = [];
     doc.on('data', buffers.push.bind(buffers));
@@ -690,7 +692,25 @@ async function generarPDFTicket(ticket, history) {
       .text('Historial de Estados', { align: 'center', underline: true });
     doc.moveDown(1);
 
-    history.forEach(h => {
+    // Imagen principal del ticket (si existe)
+    if (ticket.image && (ticket.image.endsWith('.jpg') || ticket.image.endsWith('.jpeg') || ticket.image.endsWith('.png'))) {
+      try {
+        let imageBuffer = null;
+        if (ticket.image.startsWith('http')) {
+          const response = await axios.get(ticket.image, { responseType: 'arraybuffer' });
+          imageBuffer = Buffer.from(response.data, 'binary');
+        } else {
+          imageBuffer = fs.readFileSync(ticket.image);
+        }
+        doc.moveDown(0.5);
+        doc.image(imageBuffer, { width: 220, align: 'center' });
+        doc.moveDown(1);
+      } catch (e) {
+        doc.text('[No se pudo cargar la imagen principal]', { align: 'center' });
+      }
+    }
+
+    for (const h of history) {
       doc
         .font('Helvetica-Bold')
         .fontSize(12)
@@ -704,6 +724,7 @@ async function generarPDFTicket(ticket, history) {
         .fontSize(11)
         .fillColor('#444')
         .text(`Obs: ${h.observations || 'Ninguna'}`, { align: 'center' });
+
       if (
         h.attachment &&
         (h.attachment.endsWith('.jpg') ||
@@ -712,14 +733,23 @@ async function generarPDFTicket(ticket, history) {
       ) {
         try {
           doc.moveDown(0.2);
-          doc.image(h.attachment, { width: 180, align: 'center' });
+          // Descargar la imagen como buffer
+          let imageBuffer = null;
+          if (h.attachment.startsWith('http')) {
+            const response = await axios.get(h.attachment, { responseType: 'arraybuffer' });
+            imageBuffer = Buffer.from(response.data, 'binary');
+          } else {
+            // Si es ruta local
+            imageBuffer = fs.readFileSync(h.attachment);
+          }
+          doc.image(imageBuffer, { width: 180, align: 'center' });
           doc.moveDown(0.5);
         } catch (e) {
           doc.text('[No se pudo cargar la imagen]', { align: 'center' });
         }
       }
       doc.moveDown(1);
-    });
+    }
 
     // Pie de página
     doc.moveDown(2);
