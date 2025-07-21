@@ -782,7 +782,7 @@ app.get('/api/tickets/:id/pdf', async (req, res) => {
 
     // Obtener historial
     const [history] = await pool.query(`
-      SELECT h.status, DATE_FORMAT(DATE_SUB(h.changed_at, INTERVAL 1 HOUR), '%d/%m/%Y %H:%i:%s') AS changed_at, h.observations, u.username
+      SELECT h.status, DATE_FORMAT(DATE_SUB(h.changed_at, INTERVAL 1 HOUR), '%d/%m/%Y %H:%i:%s') AS changed_at, h.observations, u.username, h.attachment
       FROM ticket_status_history h
       LEFT JOIN users u ON h.user_id = u.id
       WHERE h.ticket_id = ?
