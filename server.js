@@ -725,27 +725,26 @@ async function generarPDFTicket(ticket, history) {
         .fillColor('#444')
         .text(`Obs: ${h.observations || 'Ninguna'}`, { align: 'center' });
 
-      if (
-        h.attachment &&
-        (h.attachment.endsWith('.jpg') ||
-          h.attachment.endsWith('.jpeg') ||
-          h.attachment.endsWith('.png'))
-      ) {
-        try {
-          doc.moveDown(0.2);
-          // Descargar la imagen como buffer
-          let imageBuffer = null;
-          if (h.attachment.startsWith('http')) {
-            const response = await axios.get(h.attachment, { responseType: 'arraybuffer' });
-            imageBuffer = Buffer.from(response.data, 'binary');
-          } else {
-            // Si es ruta local
-            imageBuffer = fs.readFileSync(h.attachment);
+      // --- BLOQUE MEJORADO PARA IMÁGENES DEL HISTORIAL ---
+      if (h.attachment) {
+        // Limpia el @ si existe
+        let attachmentUrl = h.attachment.startsWith('@') ? h.attachment.substring(1) : h.attachment;
+        // Acepta jpg, jpeg, png, gif (mayúsculas/minúsculas)
+        if (/\.(jpg|jpeg|png|gif)$/i.test(attachmentUrl)) {
+          try {
+            doc.moveDown(0.2);
+            let imageBuffer = null;
+            if (attachmentUrl.startsWith('http')) {
+              const response = await axios.get(attachmentUrl, { responseType: 'arraybuffer' });
+              imageBuffer = Buffer.from(response.data, 'binary');
+            } else {
+              imageBuffer = fs.readFileSync(attachmentUrl);
+            }
+            doc.image(imageBuffer, { width: 180, align: 'center' });
+            doc.moveDown(0.5);
+          } catch (e) {
+            doc.text('[No se pudo cargar la imagen]', { align: 'center' });
           }
-          doc.image(imageBuffer, { width: 180, align: 'center' });
-          doc.moveDown(0.5);
-        } catch (e) {
-          doc.text('[No se pudo cargar la imagen]', { align: 'center' });
         }
       }
       doc.moveDown(1);
