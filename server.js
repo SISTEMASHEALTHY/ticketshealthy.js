@@ -659,6 +659,23 @@ async function generarPDFTicket(ticket, history) {
       `Prioridad: ${ticket.priority}`,
       `Asignado a: ${ticket.assigned_username || 'No asignado'}`
     ];
+        // Imagen principal del ticket (si existe)
+    if (ticket.image && (ticket.image.endsWith('.jpg') || ticket.image.endsWith('.jpeg') || ticket.image.endsWith('.png'))) {
+      try {
+        let imageBuffer = null;
+        if (ticket.image.startsWith('http')) {
+          const response = await axios.get(ticket.image, { responseType: 'arraybuffer' });
+          imageBuffer = Buffer.from(response.data, 'binary');
+        } else {
+          imageBuffer = fs.readFileSync(ticket.image);
+        }
+        doc.moveDown(0.5);
+        doc.image(imageBuffer, { width: 220, align: 'center' });
+        doc.moveDown(1);
+      } catch (e) {
+        doc.text('[No se pudo cargar la imagen principal]', { align: 'center' });
+      }
+    }
     datos.forEach(linea => {
       doc.font('Helvetica').fontSize(12).fillColor('#222').text(linea, { align: 'center' });
       doc.moveDown(0.5);
@@ -692,23 +709,6 @@ async function generarPDFTicket(ticket, history) {
       .text('Historial de Estados', { align: 'center', underline: true });
     doc.moveDown(1);
 
-    // Imagen principal del ticket (si existe)
-    if (ticket.image && (ticket.image.endsWith('.jpg') || ticket.image.endsWith('.jpeg') || ticket.image.endsWith('.png'))) {
-      try {
-        let imageBuffer = null;
-        if (ticket.image.startsWith('http')) {
-          const response = await axios.get(ticket.image, { responseType: 'arraybuffer' });
-          imageBuffer = Buffer.from(response.data, 'binary');
-        } else {
-          imageBuffer = fs.readFileSync(ticket.image);
-        }
-        doc.moveDown(0.5);
-        doc.image(imageBuffer, { width: 220, align: 'center' });
-        doc.moveDown(1);
-      } catch (e) {
-        doc.text('[No se pudo cargar la imagen principal]', { align: 'center' });
-      }
-    }
 
     for (const h of history) {
       doc
