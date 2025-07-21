@@ -651,7 +651,7 @@ async function generarPDFTicket(ticket, history) {
     const datos = [
       `ID: ${ticket.id}    Estado: ${ticket.status}`,
       `Solicitante: ${ticket.requester}`,
-      `Fecha: ${fechaFormateada}`,
+      `Fecha: ${created_at}`,
       `Lugar: ${ticket.location}`,
       `Departamento: ${ticket.department}`,
       `Categoría: ${ticket.category}`,
@@ -674,6 +674,28 @@ async function generarPDFTicket(ticket, history) {
         doc.moveDown(1);
       } catch (e) {
         doc.text('[No se pudo cargar la imagen principal]', { align: 'center' });
+      }
+    }
+    // Calcular duración total si está resuelto
+    if (ticket.status === 'Resuelto') {
+      const fechaCreacion = moment(ticket.created_at, 'DD/MM/YYYY HH:mm:ss');
+      const resuelto = history.find(h => h.status === 'Resuelto');
+      if (resuelto) {
+        const fechaResuelto = moment(resuelto.changed_at, 'DD/MM/YYYY HH:mm:ss');
+        const duracion = moment.duration(fechaResuelto.diff(fechaCreacion));
+        const dias = duracion.days();
+        const horas = duracion.hours();
+        const minutos = duracion.minutes();
+        let duracionStr = '';
+        if (dias > 0) duracionStr += `${dias} día${dias > 1 ? 's' : ''} `;
+        if (horas > 0) duracionStr += `${horas} hora${horas > 1 ? 's' : ''} `;
+        duracionStr += `${minutos} minuto${minutos > 1 ? 's' : ''}`;
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(12)
+          .fillColor('#FF0000')
+          .text(`Duración total: ${duracionStr}`, { align: 'center' });
+        doc.moveDown(1);
       }
     }
     datos.forEach(linea => {
@@ -711,44 +733,56 @@ async function generarPDFTicket(ticket, history) {
 
 
     for (const h of history) {
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(12)
-        .fillColor('#222')
-        .text(
-          `- ${h.status} | ${h.changed_at} | ${h.username || 'Desconocido'}`,
-          { align: 'center' }
-        );
-      doc
-        .font('Helvetica')
-        .fontSize(11)
-        .fillColor('#444')
-        .text(`Obs: ${h.observations || 'Ninguna'}`, { align: 'center' });
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(12)
+    .fillColor('#222')
+    .text(
+      `- ${h.status} | ${h.changed_at} | ${h.username || 'Desconocido'}`,
+      { align: 'center' }
+    );
+  doc
+    .font('Helvetica')
+    .fontSize(11)
+    .fillColor('#444')
+    .text(`Obs: ${h.observations || 'Ninguna'}`, { align: 'center' });
 
-      // --- BLOQUE MEJORADO PARA IMÁGENES DEL HISTORIAL ---
-      if (h.attachment) {
-        // Limpia el @ si existe
-        let attachmentUrl = h.attachment.startsWith('@') ? h.attachment.substring(1) : h.attachment;
-        // Acepta jpg, jpeg, png, gif (mayúsculas/minúsculas)
-        if (/\.(jpg|jpeg|png|gif)$/i.test(attachmentUrl)) {
-          try {
-            doc.moveDown(0.2);
-            let imageBuffer = null;
-            if (attachmentUrl.startsWith('http')) {
-              const response = await axios.get(attachmentUrl, { responseType: 'arraybuffer' });
-              imageBuffer = Buffer.from(response.data, 'binary');
-            } else {
-              imageBuffer = fs.readFileSync(attachmentUrl);
-            }
-            doc.image(imageBuffer, { width: 180, align: 'center' });
-            doc.moveDown(0.5);
-          } catch (e) {
-            doc.text('[No se pudo cargar la imagen]', { align: 'center' });
-          }
+  if (h.attachment) {
+    let attachmentUrl = h.attachment.startsWith('@') ? h.attachment.substring(1) : h.attachment;
+    const ext = (attachmentUrl.split('.').pop() || '').toLowerCase();
+
+    if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
+      try {
+        doc.moveDown(0.2);
+        let imageBuffer = null;
+        if (attachmentUrl.startsWith('http')) {
+          const response = await axios.get(attachmentUrl, { responseType: 'arraybuffer' });
+          imageBuffer = Buffer.from(response.data, 'binary');
+        } else {
+          imageBuffer = fs.readFileSync(attachmentUrl);
         }
+        // Centrar imagen manualmente
+        const imgOptions = { width: 180, align: 'center' };
+        doc.image(imageBuffer, imgOptions);
+        doc.moveDown(0.5);
+      } catch (e) {
+        doc.text('[No se pudo cargar la imagen]', { align: 'center' });
       }
-      doc.moveDown(1);
+    } else if (ext === 'pdf' || ext === 'xlsx') {
+      doc
+        .font('Helvetica-Oblique')
+        .fontSize(11)
+        .fillColor('#0077cc')
+        .text(`Archivo adjunto: ${ext.toUpperCase()} - Ver/Descargar`, {
+          link: attachmentUrl,
+          underline: true,
+          align: 'center'
+        });
+      doc.moveDown(0.5);
     }
+  }
+  doc.moveDown(1);
+}
 
     // Pie de página
     doc.moveDown(2);
