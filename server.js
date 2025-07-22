@@ -664,7 +664,7 @@ async function generarPDFTicket(ticket, history) {
       const minutos = duracion.minutes();
       duracionTotal = `${dias > 0 ? dias + ' día(s) ' : ''}${horas > 0 ? horas + ' hora(s) ' : ''}${minutos} minuto(s)`;
     }
-    
+
     const datos = [
       `ID: ${ticket.id}    Estado: ${ticket.status}`,
       `Solicitante: ${ticket.requester}`,
@@ -686,9 +686,12 @@ async function generarPDFTicket(ticket, history) {
         } else {
           imageBuffer = fs.readFileSync(ticket.image);
         }
-        doc.moveDown(0.5);
-        doc.image(imageBuffer, { width: 220, align: 'center' });
-        doc.moveDown(1);
+        // Centrar imagen manualmente
+          const pageWidth = doc.page.width;
+          const imageWidth = 180;
+          const x = (pageWidth - imageWidth) / 2;
+          doc.image(imageBuffer, x, doc.y, { width: imageWidth });
+          doc.moveDown(0.5);
       } catch (e) {
         doc.text('[No se pudo cargar la imagen principal]', { align: 'center' });
       }
