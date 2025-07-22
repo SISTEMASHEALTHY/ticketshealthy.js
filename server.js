@@ -647,7 +647,24 @@ async function generarPDFTicket(ticket, history) {
       .text('Datos del Ticket', { align: 'center', underline: true });
     doc.moveDown(1);
 
-    const fechaFormateada = moment(ticket.date).format('DD/MM/YYYY hh:mm a');
+    
+    const fechaFormateada = moment(ticket.created_at, 'DD/MM/YYYY HH:mm:ss').format('DD/MM/YYYY HH:mm:ss');
+
+        // Busca el primer y último cambio de estado
+    const primerEstado = history[0];
+    const ultimoResuelto = history.filter(h => h.status === 'Resuelto').pop();
+
+    let duracionTotal = '';
+    if (primerEstado && ultimoResuelto) {
+      const inicio = moment(primerEstado.changed_at, 'DD/MM/YYYY HH:mm:ss');
+      const fin = moment(ultimoResuelto.changed_at, 'DD/MM/YYYY HH:mm:ss');
+      const duracion = moment.duration(fin.diff(inicio));
+      const dias = duracion.days();
+      const horas = duracion.hours();
+      const minutos = duracion.minutes();
+      duracionTotal = `${dias > 0 ? dias + ' día(s) ' : ''}${horas > 0 ? horas + ' hora(s) ' : ''}${minutos} minuto(s)`;
+    }
+    
     const datos = [
       `ID: ${ticket.id}    Estado: ${ticket.status}`,
       `Solicitante: ${ticket.requester}`,
@@ -675,6 +692,10 @@ async function generarPDFTicket(ticket, history) {
       } catch (e) {
         doc.text('[No se pudo cargar la imagen principal]', { align: 'center' });
       }
+    }
+    if (duracionTotal) {
+      doc.font('Helvetica-Bold').fontSize(12).fillColor('#222').text(`Duración total: ${duracionTotal}`, { align: 'center' });
+      doc.moveDown(1);
     }
     datos.forEach(linea => {
       doc.font('Helvetica').fontSize(12).fillColor('#222').text(linea, { align: 'center' });
@@ -727,26 +748,28 @@ async function generarPDFTicket(ticket, history) {
 
       // --- BLOQUE MEJORADO PARA IMÁGENES DEL HISTORIAL ---
       if (h.attachment) {
-        // Limpia el @ si existe
-        let attachmentUrl = h.attachment.startsWith('@') ? h.attachment.substring(1) : h.attachment;
-        // Acepta jpg, jpeg, png, gif (mayúsculas/minúsculas)
-        if (/\.(jpg|jpeg|png|gif)$/i.test(attachmentUrl)) {
-          try {
-            doc.moveDown(0.2);
-            let imageBuffer = null;
-            if (attachmentUrl.startsWith('http')) {
-              const response = await axios.get(attachmentUrl, { responseType: 'arraybuffer' });
-              imageBuffer = Buffer.from(response.data, 'binary');
-            } else {
-              imageBuffer = fs.readFileSync(attachmentUrl);
+          let attachmentUrl = h.attachment.startsWith('@') ? h.attachment.substring(1) : h.attachment;
+          if (/\.(jpg|jpeg|png|gif)$/i.test(attachmentUrl)) {
+            try {
+              doc.moveDown(0.2);
+              let imageBuffer = null;
+              if (attachmentUrl.startsWith('http')) {
+                const response = await axios.get(attachmentUrl, { responseType: 'arraybuffer' });
+                imageBuffer = Buffer.from(response.data, 'binary');
+              } else {
+                imageBuffer = fs.readFileSync(attachmentUrl);
+              }
+              // Centrar imagen manualmente
+              const pageWidth = doc.page.width;
+              const imageWidth = 180;
+              const x = (pageWidth - imageWidth) / 2;
+              doc.image(imageBuffer, x, doc.y, { width: imageWidth });
+              doc.moveDown(0.5);
+            } catch (e) {
+              doc.text('[No se pudo cargar la imagen]', { align: 'center' });
             }
-            doc.image(imageBuffer, { width: 180, align: 'center' });
-            doc.moveDown(0.5);
-          } catch (e) {
-            doc.text('[No se pudo cargar la imagen]', { align: 'center' });
           }
         }
-      }
       doc.moveDown(1);
     }
 
