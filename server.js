@@ -635,6 +635,10 @@ async function generarPDFTicket(ticket, history) {
       .text('Ticket Resuelto', { align: 'center' });
     doc.moveDown(1.5);
 
+    // Línea divisoria
+    doc.moveTo(60, doc.y).lineTo(535, doc.y).strokeColor('#e0e0e0').stroke();
+    doc.moveDown(1.2);
+
     // Datos principales (centrados)
     doc
       .fontSize(13)
@@ -660,7 +664,6 @@ async function generarPDFTicket(ticket, history) {
       const minutos = duracion.minutes();
       duracionTotal = `${dias > 0 ? dias + ' día(s) ' : ''}${horas > 0 ? horas + ' hora(s) ' : ''}${minutos} minuto(s)`;
     }
-    
     const datos = [
       `ID: ${ticket.id}    Estado: ${ticket.status}`,
       `Solicitante: ${ticket.requester}`,
@@ -683,11 +686,7 @@ async function generarPDFTicket(ticket, history) {
           imageBuffer = fs.readFileSync(ticket.image);
         }
         doc.moveDown(0.5);
-        // Centrar imagen principal manualmente
-        const pageWidth = doc.page.width;
-        const imageWidth = 220;
-        const x = (pageWidth - imageWidth) / 2;
-        doc.image(imageBuffer, x, doc.y, { width: imageWidth });
+        doc.image(imageBuffer, { width: 220, align: 'center' });
         doc.moveDown(1);
       } catch (e) {
         doc.text('[No se pudo cargar la imagen principal]', { align: 'center' });
@@ -697,6 +696,10 @@ async function generarPDFTicket(ticket, history) {
       doc.font('Helvetica-Bold').fontSize(12).fillColor('#222').text(`Duración total: ${duracionTotal}`, { align: 'center' });
       doc.moveDown(1);
     }
+    datos.forEach(linea => {
+      doc.font('Helvetica').fontSize(12).fillColor('#222').text(linea, { align: 'center' });
+      doc.moveDown(0.5);
+    });
 
     doc.moveDown(1);
 
@@ -768,6 +771,19 @@ async function generarPDFTicket(ticket, history) {
         }
       doc.moveDown(1);
     }
+
+    // Pie de página
+    doc.moveDown(2);
+    doc
+      .fontSize(9)
+      .fillColor('#888')
+      .text(
+        'Reporte generado automáticamente por el Sistema de Tickets',
+        60,
+        770,
+        { align: 'center' }
+      );
+
     doc.end();
   });
 }
