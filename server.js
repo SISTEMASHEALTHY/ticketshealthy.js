@@ -89,7 +89,7 @@ async function sendWhatsAppMessage(to, message) {
   }
 }
 
-// Verify SMTP connection
+// Verify SMTP connectionn
 transporter.verify((error, success) => {
   if (error) {
     console.error('Error al verificar el transporter:', error);
