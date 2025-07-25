@@ -73,6 +73,22 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+const twilio = require('twilio');
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+async function sendWhatsAppMessage(to, message) {
+  try {
+    await twilioClient.messages.create({
+      from: process.env.TWILIO_WHATSAPP_NUMBER,
+      to: `whatsapp:${to}`,
+      body: message
+    });
+    console.log('Mensaje de WhatsApp enviado a:', to);
+  } catch (error) {
+    console.error('Error al enviar WhatsApp:', error);
+  }
+}
+
 // Verify SMTP connection
 transporter.verify((error, success) => {
   if (error) {
@@ -276,7 +292,7 @@ app.post('/api/login', async (req, res) => {
 
 // Endpoint: Create user (admin only)
 app.post('/api/users', async (req, res) => {
-  const { username, password, email, department, role, adminId } = req.body;
+  const { username, password, email, whatsapp, department, role, adminId } = req.body;
   console.log('Creando usuario:', username);
   try {
     const [admins] = await pool.query('SELECT * FROM users WHERE id = ? AND role = "admin"', [adminId]);
@@ -300,8 +316,8 @@ app.post('/api/users', async (req, res) => {
     }
     const hashedPassword = await bcrypt.hash(password, 10);
     await pool.query(
-      'INSERT INTO users (username, password, email, department, role) VALUES (?, ?, ?, ?, ?)',
-      [username, hashedPassword, email, department, role]
+      'INSERT INTO users (username, password, email, whatsapp, department, role) VALUES (?, ?, ?, ?, ?, ?)',
+      [username, hashedPassword, email, whatsapp, department, role]
     );
       await registrarAuditoria(adminId, username, 'Crear usuario', `Usuario creado: ${username}`, req);
     try {
@@ -336,7 +352,7 @@ app.get('/api/users', async (req, res) => {
       console.log('No autorizado para listar usuarios, adminId:', adminId);
       return res.status(403).json({ error: 'No autorizado' });
     }
-    const [users] = await pool.query('SELECT id, username, email, department, role FROM users');
+    const [users] = await pool.query('SELECT id, username, email, whatsapp, department, role FROM users');
     console.log('Usuarios listados:', users.length);
     res.json(users);
   } catch (error) {
@@ -392,7 +408,7 @@ app.get('/api/users/available', async (req, res) => {
 // Actualizar usuario (admin only)
 app.put('/api/users/:id', async (req, res) => {
   const { id } = req.params;
-  const { username, password, email, department, role, adminId } = req.body;
+  const { username, password, email, whatsapp, department, role, adminId } = req.body;
   try {
     // Solo admin puede editar
     const [admins] = await pool.query('SELECT * FROM users WHERE id = ? AND role = "admin"', [adminId]);
@@ -412,13 +428,13 @@ app.put('/api/users/:id', async (req, res) => {
     if (password && password.trim() !== '') {
       const hashedPassword = await bcrypt.hash(password, 10);
       await pool.query(
-        'UPDATE users SET email = ?, department = ?, role = ?, password = ? WHERE id = ?',
-        [email, department, role, hashedPassword, id]
+        'UPDATE users SET email = ?, whatsapp = ?, department = ?, role = ?, password = ? WHERE id = ?',
+        [email, whatsapp, department, role, hashedPassword, id]
       );
     } else {
       await pool.query(
-        'UPDATE users SET email = ?, department = ?, role = ? WHERE id = ?',
-        [email, department, role, id]
+        'UPDATE users SET email = ?, whatsapp = ?, department = ?, role = ? WHERE id = ?',
+        [email, whatsapp, department, role, id]
       );
     }
     await registrarAuditoria(adminId, username, 'Editar usuario', `Usuario editado: ${username}`, req);
@@ -870,60 +886,69 @@ app.put('/api/tickets/:id/transfer', async (req, res) => {
 });
 
   // Endpoint: Update ticket status
-  app.put('/api/tickets/:id', upload.single('file'), async (req, res) => {
-    const { id } = req.params;
-    const { status, userId, observations } = req.body;
-    const file = req.file ? req.file.path : null;
+app.put('/api/tickets/:id', upload.single('file'), async (req, res) => {
+  const { id } = req.params;
+  const { status, userId, observations } = req.body;
+  const file = req.file ? req.file.path : null;
 
-    if (!status || !userId) {
-      return res.status(400).json({ error: 'Faltan campos obligatorios' });
-    }
+  if (!status || !userId) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios' });
+  }
 
-    try {
-      await pool.query('UPDATE tickets SET status = ? WHERE id = ?', [status, id]);
-      await pool.query(
-        'INSERT INTO ticket_status_history (ticket_id, status, changed_at, observations, user_id, attachment) VALUES (?, ?, NOW(), ?, ?, ?)',
-        [id, status, observations || '', userId, file]
-      );
-      await registrarAuditoria(userId, null, 'Actualizar estado', `Ticket ${id} actualizado a ${status}`, req);
+  try {
+    await pool.query('UPDATE tickets SET status = ? WHERE id = ?', [status, id]);
+    await pool.query(
+      'INSERT INTO ticket_status_history (ticket_id, status, changed_at, observations, user_id, attachment) VALUES (?, ?, NOW(), ?, ?, ?)',
+      [id, status, observations || '', userId, file]
+    );
+    await registrarAuditoria(userId, null, 'Actualizar estado', `Ticket ${id} actualizado a ${status}`, req);
 
-      const [ticketRows] = await pool.query('SELECT requester, user_id FROM tickets WHERE id = ?', [id]);
-      if (ticketRows.length > 0) {
-        const ticket = ticketRows[0];
-        const [userRows] = await pool.query('SELECT email FROM users WHERE id = ?', [ticket.user_id]);
-        if (userRows.length > 0) {
-          const email = userRows[0].email;
-          // Mensaje personalizado según el estado
-          let asunto = `Actualización de tu ticket #${id}`;
-          let texto = `Hola ${ticket.requester},\n\nEl estado de tu ticket #${id} ha cambiado a: ${status}.\n\n`;
-          if (status === 'Resuelto') {
-            texto += 'Tu ticket ha sido resuelto. te invitamos a contestaron la encuesta de satisfacción en el mismo ticket\n¡Gracias!';
-          } else if (status === 'En Proceso') {
-            texto += 'Tu ticket está siendo atendido por el equipo de soporte.';
-          } else if (status === 'Pendiente') {
-            texto += 'Tu ticket ha sido recibido y está en espera de ser atendido.';
-          }
-          if (observations) {
-            texto += `\n\nObservaciones: ${observations}`;
-          }
-          texto += '\n\nSaludos,\nEl Sistema de Tickets';
+    const [ticketRows] = await pool.query('SELECT requester, user_id FROM tickets WHERE id = ?', [id]);
+    if (ticketRows.length > 0) {
+      const ticket = ticketRows[0];
+      // AHORA TRAEMOS TAMBIÉN EL WHATSAPP
+      const [userRows] = await pool.query('SELECT email, whatsapp FROM users WHERE id = ?', [ticket.user_id]);
+      if (userRows.length > 0) {
+        const email = userRows[0].email;
+        const whatsapp = userRows[0].whatsapp; 
 
-          const mailOptions = {
-            from: process.env.SMTP_FROM,
-            to: email,
-            subject: asunto,
-            text: texto
-          };
-          await transporter.sendMail(mailOptions);
+        // Mensaje personalizado según el estado
+        let asunto = `Actualización de tu ticket #${id}`;
+        let texto = `Hola ${ticket.requester},\n\nEl estado de tu ticket #${id} ha cambiado a: ${status}.\n\n`;
+        if (status === 'Resuelto') {
+          texto += 'Tu ticket ha sido resuelto. Te invitamos a contestar la encuesta de satisfacción en el mismo ticket.\n¡Gracias!';
+        } else if (status === 'En Proceso') {
+          texto += 'Tu ticket está siendo atendido por el equipo de soporte.';
+        } else if (status === 'Pendiente') {
+          texto += 'Tu ticket ha sido recibido y está en espera de ser atendido.';
+        }
+        if (observations) {
+          texto += `\n\nObservaciones: ${observations}`;
+        }
+        texto += '\n\nSaludos,\nEl Sistema de Tickets';
+
+        // Enviar correo
+        const mailOptions = {
+          from: process.env.SMTP_FROM,
+          to: email,
+          subject: asunto,
+          text: texto
+        };
+        await transporter.sendMail(mailOptions);
+
+        // Enviar WhatsApp si hay número registrado
+        if (whatsapp) {
+          await sendWhatsAppMessage(whatsapp, texto);
         }
       }
-      
-      res.json({ message: 'Estado actualizado' });
-    } catch (error) {
-      console.error('Error en /api/tickets/:id:', error);
-      res.status(500).json({ error: 'Error al actualizar estado', details: error.message });
     }
-  });
+    
+    res.json({ message: 'Estado actualizado' });
+  } catch (error) {
+    console.error('Error en /api/tickets/:id:', error);
+    res.status(500).json({ error: 'Error al actualizar estado', details: error.message });
+  }
+});
 
 // Endpoint: Reopen ticket (admin only)
 app.put('/api/tickets/:id/reopen', async (req, res) => {

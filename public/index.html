@@ -72,6 +72,10 @@
           <input type="email" id="registerEmail" placeholder="correo@ejemplo.com" required>
         </div>
         <div class="form-group">
+          <label for="registerWhatsApp">WhatsApp *</label>
+          <input type="text" id="registerWhatsApp" placeholder="Ej: 524623298321" required>
+        </div>
+        <div class="form-group">
           <label for="registerDepartment">Departamento *</label>
           <select id="registerDepartment" required>
             <option value="Mantenimiento">Mantenimiento</option>
@@ -483,6 +487,7 @@
       const username = document.getElementById('registerUsername').value;
       const password = document.getElementById('registerPassword').value;
       const email = document.getElementById('registerEmail').value;
+      const whatsapp = document.getElementById('registerWhatsApp').value;
       const department = document.getElementById('registerDepartment').value;
       const role = document.getElementById('registerRole').value;
       const error = document.getElementById('registerError');
@@ -496,7 +501,7 @@
         const response = await fetch('/api/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, email, department, role, adminId: currentUser.id })
+          body: JSON.stringify({ username, password, email, whatsapp, department, role, adminId: currentUser.id })
         });
         const data = await response.json();
         if (data.error) {
@@ -530,6 +535,7 @@
             <p><strong>ID:</strong> ${user.id}</p>
             <p><strong>Usuario:</strong> ${user.username}</p>
             <p><strong>Correo:</strong> ${user.email}</p>
+            <p><strong>WhatsApp:</strong> ${user.whatsapp || ''}</p>
             <p><strong>Departamento:</strong> ${user.department}</p>
             <p><strong>Rol:</strong> ${user.role}</p>
             <button onclick="editarUsuario(${user.id})">Editar</button>
@@ -554,6 +560,7 @@
       document.getElementById('registerPassword').value = '';
       document.getElementById('registerPassword').placeholder = '(Dejar en blanco para no cambiar)';
       document.getElementById('registerEmail').value = user.email;
+      document.getElementById('registerWhatsApp').value = user.whatsapp || '';
       document.getElementById('registerDepartment').value = user.department;
       document.getElementById('registerRole').value = user.role;
       editUserId = user.id;
@@ -577,6 +584,7 @@
       const username = document.getElementById('registerUsername').value;
       const password = document.getElementById('registerPassword').value;
       const email = document.getElementById('registerEmail').value;
+      const whatsapp = document.getElementById('registerWhatsApp').value;
       const department = document.getElementById('registerDepartment').value;
       const role = document.getElementById('registerRole').value;
       const error = document.getElementById('registerError');
@@ -588,7 +596,7 @@
         const response = await fetch(`/api/users/${editUserId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, email, department, role, adminId: currentUser.id })
+          body: JSON.stringify({ username, password, email, whatsapp, department, role, adminId: currentUser.id })
         });
         const data = await response.json();
         if (data.error) {
@@ -610,6 +618,7 @@
       document.getElementById('registerPassword').value = '';
       document.getElementById('registerPassword').placeholder = 'Contraseña';
       document.getElementById('registerEmail').value = '';
+      document.getElementById('registerWhatsApp').value = '';
       document.getElementById('registerDepartment').value = 'Mantenimiento';
       document.getElementById('registerRole').value = 'user';
       let btn = document.querySelector('.form-section button');
