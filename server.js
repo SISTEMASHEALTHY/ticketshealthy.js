@@ -73,7 +73,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// const twilio = require('twilio');
+const twilio = require('twilio');
 const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
 async function sendWhatsAppMessage(to, message) {
