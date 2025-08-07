@@ -74,44 +74,22 @@ const transporter = nodemailer.createTransport({
 });
 
 // const twilio = require('twilio');
- // const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-// async function sendWhatsAppMessage(to, message) {
-  // try {
-    // await twilioClient.messages.create({
-      // from: process.env.TWILIO_WHATSAPP_NUMBER,
-      // to: `whatsapp:${to}`,
-      // body: message
-    // });
-    // console.log('Mensaje de WhatsApp enviado a:', to);
-  // } catch (error) {
-    // console.error('Error al enviar WhatsApp:', error);
-  // }
-// }
-
-// Función para enviar SMS usando la API de HealthyPeople
-async function sendSMSHealthyPeople(phone, message) {
+async function sendWhatsAppMessage(to, message) {
   try {
-    const response = await axios.post(
-      'https://healthypeople.online/api/send-sms',
-      {
-        phone,
-        message
-      },
-      {
-        headers: {
-          'Authorization': process.env.HEALTHY_PEOPLE_SMS_TOKEN, 
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    console.log('Respuesta SMS:', response.data);
-    return response.data;
+    await twilioClient.messages.create({
+      from: process.env.TWILIO_WHATSAPP_NUMBER,
+      to: `whatsapp:${to}`,
+      body: message
+    });
+    console.log('Mensaje de WhatsApp enviado a:', to);
   } catch (error) {
-    console.error('Error al enviar SMS:', error.response ? error.response.data : error.message);
-    throw error;
+    console.error('Error al enviar WhatsApp:', error);
   }
 }
+
+
 
 // Verify SMTP connectionn
 transporter.verify((error, success) => {
@@ -960,10 +938,10 @@ app.put('/api/tickets/:id', upload.single('file'), async (req, res) => {
         };
         await transporter.sendMail(mailOptions);
 
-      // Enviar SMS usando la API de HealthyPeople si hay número registrado
-      if (whatsapp) {
-        await sendSMSHealthyPeople(whatsapp, texto);
-      }
+        // Enviar WhatsApp si hay número registrado
+        if (whatsapp) {
+          await sendWhatsAppMessage(whatsapp, texto);
+        }
       }
     }
     
