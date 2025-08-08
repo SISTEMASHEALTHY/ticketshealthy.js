@@ -73,19 +73,28 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-const twilio = require('twilio');
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-
-async function sendWhatsAppMessage(to, message) {
+async function sendHealthyPeopleSMS(phone, message) {
   try {
-    await twilioClient.messages.create({
-      from: process.env.TWILIO_WHATSAPP_NUMBER,
-      to: `whatsapp:${to}`,
-      body: message
-    });
-    console.log('Mensaje de WhatsApp enviado a:', to);
+    const response = await axios.post(
+      'https://healthypeople.online/api/send-sms',
+      {
+        phone: phone, // Usa el número tal como viene
+        message: message
+      },
+      {
+        headers: {
+          Authorization: process.env.HEALTHYPEOPLE_SMS_TOKEN,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    if (response.data && response.data.success) {
+      console.log('SMS enviado correctamente a:', phone);
+    } else {
+      console.error('Error al enviar SMS:', response.data);
+    }
   } catch (error) {
-    console.error('Error al enviar WhatsApp:', error);
+    console.error('Error al enviar SMS:', error.response ? error.response.data : error.message);
   }
 }
 
@@ -940,7 +949,7 @@ app.put('/api/tickets/:id', upload.single('file'), async (req, res) => {
 
         // Enviar WhatsApp si hay número registrado
         if (whatsapp) {
-          await sendWhatsAppMessage(whatsapp, texto);
+          await sendHealthyPeopleSMS(whatsapp, texto);
         }
       }
     }
